@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BodyCraften
 
-## Getting Started
+Personal gym companion: log workouts, track progressive overload, build &
+schedule plans, and generate plans from plain text with AI.
 
-First, run the development server:
+## Quick start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. No configuration needed — a local SQLite database
+is created at `data/bodycraften.db` on first run, pre-seeded with ~70 common
+exercises.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Pages
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Page | What it does |
+| --- | --- |
+| **Dashboard** | Weekly stats, training-volume chart, per-exercise strength curve (est. 1RM), recent sessions, today's scheduled workout. |
+| **Log** | The workout logger. Shows *last session's weight × reps next to every set* so you always know what to beat. Detects PRs on save. Prefills from today's scheduled plan day. |
+| **Plans** | Build multi-day plans, browse them, and schedule plan days on a 2-week calendar strip. |
+| **Exercises** | Exercise library with search and body-part filters. Uses the ExerciseDB API when a key is set, otherwise the built-in catalog. Add custom exercises anytime. |
+| **Generate** | Describe your training in plain words → structured weekly plan → save it as a plan. Uses Claude when `ANTHROPIC_API_KEY` is set; otherwise a local demo generator. |
 
-## Learn More
+## API keys (optional)
 
-To learn more about Next.js, take a look at the following resources:
+Copy `.env.example` to `.env.local`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+ANTHROPIC_API_KEY=sk-ant-...   # real AI plan generation (https://platform.claude.com/)
+EXERCISEDB_API_KEY=...         # 1,300+ exercise catalog (RapidAPI → ExerciseDB)
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Restart the dev server after adding keys. Everything degrades gracefully
+without them.
 
-## Deploy on Vercel
+## Database
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+SQLite (file at `data/bodycraften.db`) through **Drizzle ORM** +
+`better-sqlite3`. Zero-config, fast, and perfect for a single-user app. Schema
+lives in `src/db/schema.ts`; tables are created automatically on first run.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Upgrade paths when you need them:
+
+- **Turso (hosted libSQL)** — keep the same Drizzle schema, sync across
+  devices.
+- **Postgres / Supabase** — if the app ever becomes multi-user (auth, sharing).
+
+## Stack
+
+Next.js 16 (App Router) · TypeScript · Tailwind CSS v4 · shadcn/ui ·
+Drizzle ORM + better-sqlite3 · Motion (Framer Motion) · Recharts ·
+Anthropic SDK (structured outputs).
