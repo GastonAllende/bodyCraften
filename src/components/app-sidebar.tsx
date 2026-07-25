@@ -1,8 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dumbbell } from "lucide-react";
 
 import { NAV_ITEMS, isActive } from "@/components/nav-items";
 import {
@@ -35,8 +35,14 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild size="lg">
               <Link href="/">
-                <span className="flex aspect-square size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                  <Dumbbell className="size-4" />
+                <span className="flex aspect-square size-8 items-center justify-center">
+                  <Image
+                    src="/logo.png"
+                    alt="BodyCraften logo"
+                    width={32}
+                    height={32}
+                    priority
+                  />
                 </span>
                 <span className="font-semibold tracking-tight">BodyCraften</span>
               </Link>
