@@ -20,7 +20,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/components/i18n-provider";
 import { addCustomExercise, importExercise } from "@/lib/actions";
+import { fmt } from "@/lib/i18n/config";
 import { cn } from "@/lib/utils";
 import type { LibraryExercise } from "@/lib/types";
 
@@ -36,6 +38,7 @@ export function ExerciseBrowser({
   apiError?: string;
 }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [bodyPart, setBodyPart] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -76,7 +79,9 @@ export function ExerciseBrowser({
       });
       setSavingName(null);
       if (result.ok) {
-        toast.success(`“${exercise.name}” saved to your library.`);
+        toast.success(fmt(t.exercisesPage.savedToLibrary, {
+          name: exercise.name,
+        }));
         router.refresh();
       } else {
         toast.error(result.error);
@@ -90,12 +95,14 @@ export function ExerciseBrowser({
         <Alert>
           <Info className="size-4" />
           <AlertTitle>
-            {apiError ? "Exercise API unreachable" : "Built-in catalog active"}
+            {apiError
+              ? t.exercisesPage.apiUnreachable
+              : t.exercisesPage.builtinActive}
           </AlertTitle>
           <AlertDescription>
             {apiError
-              ? `Couldn't reach ExerciseDB (${apiError}). Showing the built-in catalog instead.`
-              : "Showing the built-in catalog. Add EXERCISEDB_API_KEY to .env.local to browse 1,300+ exercises from the ExerciseDB API — instructions in README."}
+              ? fmt(t.exercisesPage.apiErrorDesc, { error: apiError })
+              : t.exercisesPage.builtinDesc}
           </AlertDescription>
         </Alert>
       )}
@@ -109,7 +116,7 @@ export function ExerciseBrowser({
               setQuery(e.target.value);
               setLimit(PAGE_SIZE);
             }}
-            placeholder="Search by name, muscle or equipment…"
+            placeholder={t.exercisesPage.searchPlaceholder}
             className="pl-8"
           />
         </div>
@@ -118,7 +125,7 @@ export function ExerciseBrowser({
 
       <div className="flex flex-wrap gap-1.5">
         <FilterChip
-          label="All"
+          label={t.exercisesPage.all}
           active={bodyPart === null}
           onClick={() => setBodyPart(null)}
         />
@@ -136,15 +143,17 @@ export function ExerciseBrowser({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {filtered.length} exercise{filtered.length === 1 ? "" : "s"}
-        {source === "api" && " · live from ExerciseDB"}
+        {filtered.length}{" "}
+        {filtered.length === 1
+          ? t.exercisesPage.exerciseSingular
+          : t.exercisesPage.exercisePlural}
+        {source === "api" && t.exercisesPage.liveFromApi}
       </p>
 
       {visible.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Nothing matches that search — try another term or add it as a
-            custom exercise.
+            {t.exercisesPage.noMatches}
           </CardContent>
         </Card>
       ) : (
@@ -169,7 +178,9 @@ export function ExerciseBrowser({
                         variant="ghost"
                         size="icon"
                         className="size-7 shrink-0 text-muted-foreground"
-                        aria-label={`Save ${exercise.name} to library`}
+                        aria-label={fmt(t.exercisesPage.saveToLibraryAria, {
+                          name: exercise.name,
+                        })}
                         disabled={savingName === exercise.name}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -181,7 +192,7 @@ export function ExerciseBrowser({
                     ) : (
                       <BookmarkCheck
                         className="size-4 shrink-0 text-primary"
-                        aria-label="In your library"
+                        aria-label={t.exercisesPage.inLibrary}
                       />
                     )}
                   </div>
@@ -194,7 +205,7 @@ export function ExerciseBrowser({
                     </Badge>
                     {exercise.source === "custom" && (
                       <Badge className="bg-violet-500/15 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400">
-                        custom
+                        {t.exercisesPage.customBadge}
                       </Badge>
                     )}
                   </div>
@@ -211,7 +222,7 @@ export function ExerciseBrowser({
             variant="outline"
             onClick={() => setLimit((l) => l + PAGE_SIZE)}
           >
-            Show more ({filtered.length - limit} left)
+            {fmt(t.exercisesPage.showMore, { count: filtered.length - limit })}
           </Button>
         </div>
       )}
@@ -224,13 +235,12 @@ export function ExerciseBrowser({
           <DialogHeader>
             <DialogTitle>{selected?.name}</DialogTitle>
             <DialogDescription className="capitalize">
-              {selected?.bodyPart} · {selected?.equipment} · targets{" "}
-              {selected?.target}
+              {selected?.bodyPart} · {selected?.equipment} ·{" "}
+              {t.exercisesPage.targets} {selected?.target}
             </DialogDescription>
           </DialogHeader>
           <p className="max-h-64 overflow-y-auto text-sm leading-relaxed text-muted-foreground">
-            {selected?.instructions ||
-              "No instructions stored for this exercise. Focus on controlled reps and full range of motion."}
+            {selected?.instructions || t.exercisesPage.noInstructions}
           </p>
           {selected?.remote && (
             <DialogFooter>
@@ -240,7 +250,7 @@ export function ExerciseBrowser({
                   setSelected(null);
                 }}
               >
-                <BookmarkPlus className="size-4" /> Save to my library
+                <BookmarkPlus className="size-4" /> {t.exercisesPage.saveToMyLibrary}
               </Button>
             </DialogFooter>
           )}
@@ -276,6 +286,7 @@ function FilterChip({
 }
 
 function AddCustomExerciseDialog({ onAdded }: { onAdded: () => void }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [bodyPart, setBodyPart] = useState("");
@@ -292,7 +303,7 @@ function AddCustomExerciseDialog({ onAdded }: { onAdded: () => void }) {
         target,
       });
       if (result.ok) {
-        toast.success(`“${name.trim()}” added to your library.`);
+        toast.success(fmt(t.exercisesPage.added, { name: name.trim() }));
         setOpen(false);
         setName("");
         setBodyPart("");
@@ -309,59 +320,57 @@ function AddCustomExerciseDialog({ onAdded }: { onAdded: () => void }) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="secondary">
-          <Plus className="size-4" /> New exercise
+          <Plus className="size-4" /> {t.exercisesPage.newExercise}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add a custom exercise</DialogTitle>
-          <DialogDescription>
-            It will be available in the logger and plan builder.
-          </DialogDescription>
+          <DialogTitle>{t.exercisesPage.addCustomTitle}</DialogTitle>
+          <DialogDescription>{t.exercisesPage.addCustomDesc}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="ex-name">Name</Label>
+            <Label htmlFor="ex-name">{t.exercisesPage.name}</Label>
             <Input
               id="ex-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Landmine Press"
+              placeholder={t.exercisesPage.namePlaceholder}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label htmlFor="ex-body">Body part</Label>
+              <Label htmlFor="ex-body">{t.exercisesPage.bodyPart}</Label>
               <Input
                 id="ex-body"
                 value={bodyPart}
                 onChange={(e) => setBodyPart(e.target.value)}
-                placeholder="shoulders"
+                placeholder={t.exercisesPage.bodyPartPlaceholder}
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="ex-equipment">Equipment</Label>
+              <Label htmlFor="ex-equipment">{t.exercisesPage.equipment}</Label>
               <Input
                 id="ex-equipment"
                 value={equipment}
                 onChange={(e) => setEquipment(e.target.value)}
-                placeholder="barbell"
+                placeholder={t.exercisesPage.equipmentPlaceholder}
               />
             </div>
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="ex-target">Target muscle</Label>
+            <Label htmlFor="ex-target">{t.exercisesPage.targetMuscle}</Label>
             <Input
               id="ex-target"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder="front delts"
+              placeholder={t.exercisesPage.targetPlaceholder}
             />
           </div>
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={saving || name.trim().length < 2}>
-            {saving ? "Adding…" : "Add exercise"}
+            {saving ? t.exercisesPage.adding : t.exercisesPage.add}
           </Button>
         </DialogFooter>
       </DialogContent>

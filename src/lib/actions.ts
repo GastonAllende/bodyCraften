@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -12,6 +13,8 @@ import {
   workouts,
   workoutSets,
 } from "@/db/schema";
+import { fmt, isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/server";
 import { estimateOneRepMax } from "@/lib/overload";
 import type { PlanInput, WorkoutPayload } from "@/lib/types";
 
@@ -21,6 +24,20 @@ type ActionResult<T = undefined> =
 
 function revalidateApp() {
   revalidatePath("/", "layout");
+}
+
+export async function setLocale(locale: string): Promise<ActionResult> {
+  if (!isLocale(locale)) {
+    const t = await getDictionary();
+    return { ok: false, error: t.actions.unsupportedLanguage };
+  }
+  (await cookies()).set(LOCALE_COOKIE, locale, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  revalidateApp();
+  return { ok: true };
 }
 
 export async function saveWorkout(
@@ -34,7 +51,8 @@ export async function saveWorkout(
     .filter((e) => e.name && e.sets.length > 0);
 
   if (cleanExercises.length === 0) {
-    return { ok: false, error: "Log at least one set before finishing." };
+    const t = await getDictionary();
+    return { ok: false, error: t.actions.logAtLeastOneSet };
   }
 
   // Previous best estimated 1RM per exercise, for PR detection.
@@ -53,7 +71,7 @@ export async function saveWorkout(
     .insert(workouts)
     .values({
       date: payload.date,
-      name: payload.name.trim() || "Workout",
+      name: payload.name.trim() || (await getDictionary()).common.workout,
       notes: payload.notes?.trim() || null,
       createdAt: new Date().toISOString(),
     })
@@ -123,7 +141,8 @@ export async function addCustomExercise(input: {
 }): Promise<ActionResult> {
   const name = input.name.trim();
   if (name.length < 2) {
-    return { ok: false, error: "Give the exercise a name first." };
+    const t = await getDictionary();
+    return { ok: false, error: t.actions.giveExerciseName };
   }
   const inserted = db
     .insert(exercises)
@@ -138,7 +157,8 @@ export async function addCustomExercise(input: {
     .returning()
     .all();
   if (inserted.length === 0) {
-    return { ok: false, error: `"${name}" is already in your library.` };
+    const t = await getDictionary();
+    return { ok: false, error: fmt(t.actions.alreadyInLibrary, { name }) };
   }
   revalidateApp();
   return { ok: true };
@@ -170,16 +190,17 @@ export async function importExercise(input: {
 export async function createPlan(
   input: PlanInput,
 ): Promise<ActionResult<{ planId: number }>> {
+  const t = await getDictionary();
   const name = input.name.trim();
-  if (!name) return { ok: false, error: "Give your plan a name." };
+  if (!name) return { ok: false, error: t.actions.givePlanName };
   const days = input.days
     .map((d) => ({
-      name: d.name.trim() || "Training Day",
+      name: d.name.trim() || t.actions.trainingDay,
       exercises: d.exercises.filter((e) => e.name.trim()),
     }))
     .filter((d) => d.exercises.length > 0);
   if (days.length === 0) {
-    return { ok: false, error: "Add at least one day with one exercise." };
+    return { ok: false, error: t.actions.addAtLeastOneDay };
   }
 
   const [plan] = db
@@ -229,10 +250,11 @@ export async function scheduleWorkout(input: {
   planDayId: number | null;
   label: string;
 }): Promise<ActionResult> {
+  const t = await getDictionary();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
-    return { ok: false, error: "Pick a date first." };
+    return { ok: false, error: t.actions.pickDateFirst };
   }
-  const label = input.label.trim() || "Workout";
+  const label = input.label.trim() || t.common.workout;
   db.insert(scheduleEntries)
     .values({
       date: input.date,

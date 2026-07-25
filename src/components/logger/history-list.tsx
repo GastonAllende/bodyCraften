@@ -21,19 +21,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PrBadge } from "@/components/dashboard/stat-cards";
+import { useI18n } from "@/components/i18n-provider";
 import { deleteWorkout } from "@/lib/actions";
+import { fmt } from "@/lib/i18n/config";
 import { formatShortDate, formatVolume } from "@/lib/overload";
 import type { WorkoutWithSets } from "@/lib/types";
 
 export function HistoryList({ workouts }: { workouts: WorkoutWithSets[] }) {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const [confirming, setConfirming] = useState<WorkoutWithSets | null>(null);
   const [deleting, startDeleting] = useTransition();
 
   if (workouts.length === 0) {
     return (
       <p className="py-6 text-center text-sm text-muted-foreground">
-        Your finished workouts will appear here.
+        {t.history.empty}
       </p>
     );
   }
@@ -58,7 +61,9 @@ export function HistoryList({ workouts }: { workouts: WorkoutWithSets[] }) {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Badge variant="outline">{formatVolume(w.volume)}</Badge>
-                    <span className="tabular-nums">{formatShortDate(w.date)}</span>
+                    <span className="tabular-nums">
+                      {formatShortDate(w.date, locale)}
+                    </span>
                   </div>
                 </div>
               </AccordionTrigger>
@@ -90,7 +95,7 @@ export function HistoryList({ workouts }: { workouts: WorkoutWithSets[] }) {
                     className="text-red-500 hover:text-red-600"
                     onClick={() => setConfirming(w)}
                   >
-                    <Trash2 className="size-4" /> Delete workout
+                    <Trash2 className="size-4" /> {t.history.deleteWorkout}
                   </Button>
                 </div>
               </AccordionContent>
@@ -105,16 +110,17 @@ export function HistoryList({ workouts }: { workouts: WorkoutWithSets[] }) {
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete this workout?</DialogTitle>
+            <DialogTitle>{t.history.deleteTitle}</DialogTitle>
             <DialogDescription>
-              “{confirming?.name}” from{" "}
-              {confirming ? formatShortDate(confirming.date) : ""} and all its
-              sets will be removed. This can&apos;t be undone.
+              {fmt(t.history.deleteDesc, {
+                name: confirming?.name ?? "",
+                date: confirming ? formatShortDate(confirming.date, locale) : "",
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirming(null)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               variant="destructive"
@@ -125,7 +131,7 @@ export function HistoryList({ workouts }: { workouts: WorkoutWithSets[] }) {
                 startDeleting(async () => {
                   const result = await deleteWorkout(id);
                   if (result.ok) {
-                    toast.success("Workout deleted.");
+                    toast.success(t.history.deleted);
                     setConfirming(null);
                     router.refresh();
                   } else {
@@ -134,7 +140,7 @@ export function HistoryList({ workouts }: { workouts: WorkoutWithSets[] }) {
                 });
               }}
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t.common.deleting : t.common.delete}
             </Button>
           </DialogFooter>
         </DialogContent>

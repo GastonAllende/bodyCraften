@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { useI18n } from "@/components/i18n-provider";
 import { NAV_ITEMS, isActive } from "@/components/nav-items";
 import {
   Sidebar,
@@ -20,6 +21,7 @@ import {
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { t } = useI18n();
   const { isMobile, setOpenMobile } = useSidebar();
 
   // On mobile the sidebar is a sheet overlay — close it when a link is tapped
@@ -58,16 +60,17 @@ export function AppSidebar() {
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(pathname, item.href);
+                const label = t.nav[item.labelKey];
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
                       asChild
                       isActive={active}
-                      tooltip={item.label}
+                      tooltip={label}
                     >
                       <Link href={item.href} onClick={handleNavigate}>
                         <Icon />
-                        <span>{item.label}</span>
+                        <span>{label}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

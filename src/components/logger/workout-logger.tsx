@@ -28,7 +28,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { useI18n } from "@/components/i18n-provider";
 import { saveWorkout } from "@/lib/actions";
+import { fmt } from "@/lib/i18n/config";
 import { formatShortDate, formatVolume, todayIso } from "@/lib/overload";
 import { cn } from "@/lib/utils";
 import type {
@@ -64,6 +66,7 @@ export function WorkoutLogger({
   prefills: ScheduledDayPrefill[];
 }) {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const [exercises, setExercises] = useState<LoggedExercise[]>([]);
   const [workoutName, setWorkoutName] = useState("");
   const [date, setDate] = useState(todayIso());
@@ -149,7 +152,9 @@ export function WorkoutLogger({
       date,
       name:
         workoutName.trim() ||
-        `${new Date().toLocaleDateString(undefined, { weekday: "long" })} workout`,
+        fmt(t.logger.defaultName, {
+          weekday: new Date().toLocaleDateString(locale, { weekday: "long" }),
+        }),
       scheduleEntryId: scheduleEntryId ?? undefined,
       exercises: exercises.map((e) => ({
         name: e.name,
@@ -167,11 +172,11 @@ export function WorkoutLogger({
       }
       if (result.data.prExercises.length > 0) {
         toast.success(
-          `New PR on ${result.data.prExercises.join(", ")}! 🏆`,
-          { description: "Estimated 1RM beat your previous best." },
+          fmt(t.logger.newPr, { names: result.data.prExercises.join(", ") }),
+          { description: t.logger.newPrDesc },
         );
       } else {
-        toast.success("Workout saved. Nice session! 💪");
+        toast.success(t.logger.workoutSaved);
       }
       setExercises([]);
       setWorkoutName("");
@@ -190,25 +195,23 @@ export function WorkoutLogger({
               <Dumbbell className="size-6" />
             </span>
             <div>
-              <h2 className="font-medium">Ready to train?</h2>
+              <h2 className="font-medium">{t.logger.readyTitle}</h2>
               <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                Start from today&apos;s scheduled plan or build the session as
-                you go. Last session&apos;s numbers appear next to every set —
-                beat them.
+                {t.logger.readyDesc}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
               {prefills.map((p) => (
                 <Button key={p.entryId} onClick={() => startFromPrefill(p)}>
                   <ClipboardList className="size-4" />
-                  Start “{p.label}”
+                  {fmt(t.logger.startPrefill, { label: p.label })}
                 </Button>
               ))}
               <Button
                 variant={prefills.length > 0 ? "secondary" : "default"}
                 onClick={() => setPickerOpen(true)}
               >
-                <Plus className="size-4" /> Empty workout
+                <Plus className="size-4" /> {t.logger.emptyWorkout}
               </Button>
             </div>
           </CardContent>
@@ -222,7 +225,7 @@ export function WorkoutLogger({
               <Input
                 value={workoutName}
                 onChange={(e) => setWorkoutName(e.target.value)}
-                placeholder="Workout name (e.g. Push Day)"
+                placeholder={t.logger.workoutNamePlaceholder}
                 className="h-9 w-full sm:max-w-56"
               />
               <Input
@@ -230,7 +233,7 @@ export function WorkoutLogger({
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="h-9 w-full sm:w-40"
-                aria-label="Workout date"
+                aria-label={t.logger.workoutDate}
               />
               <Button
                 variant="ghost"
@@ -242,7 +245,7 @@ export function WorkoutLogger({
                   setWorkoutName("");
                 }}
               >
-                <X className="size-4" /> Discard
+                <X className="size-4" /> {t.logger.discard}
               </Button>
             </div>
           </CardHeader>
@@ -266,23 +269,30 @@ export function WorkoutLogger({
                           {exercise.name}
                           {exercise.targetReps && (
                             <Badge variant="secondary" className="ml-2">
-                              target {exercise.targetReps} reps
+                              {fmt(t.logger.targetReps, {
+                                reps: exercise.targetReps,
+                              })}
                             </Badge>
                           )}
                         </div>
                         <div className="mt-0.5 text-xs text-muted-foreground">
                           {hint
-                            ? `Last time (${formatShortDate(hint.date)}): ${hint.sets
-                                .map((s) => `${s.weightKg}×${s.reps}`)
-                                .join("  ")}`
-                            : "First time logging this — set your baseline."}
+                            ? fmt(t.logger.lastTime, {
+                                date: formatShortDate(hint.date, locale),
+                                sets: hint.sets
+                                  .map((s) => `${s.weightKg}×${s.reps}`)
+                                  .join("  "),
+                              })
+                            : t.logger.firstTime}
                         </div>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="size-7 text-muted-foreground"
-                        aria-label={`Remove ${exercise.name}`}
+                        aria-label={fmt(t.logger.removeExercise, {
+                          name: exercise.name,
+                        })}
                         onClick={() =>
                           setExercises((prev) =>
                             prev.filter((e) => e.key !== exercise.key),
@@ -295,10 +305,12 @@ export function WorkoutLogger({
 
                     <div className="mt-3 space-y-1.5">
                       <div className="grid grid-cols-[2rem_1fr_1fr_2.25rem] items-center gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid-cols-[2.5rem_5rem_1fr_1fr_2.25rem]">
-                        <span>Set</span>
-                        <span className="hidden sm:block">Prev</span>
-                        <span>kg</span>
-                        <span>Reps</span>
+                        <span>{t.logger.setColumn}</span>
+                        <span className="hidden sm:block">
+                          {t.logger.prevColumn}
+                        </span>
+                        <span>{t.logger.kgColumn}</span>
+                        <span>{t.logger.repsColumn}</span>
                         <span />
                       </div>
                       {exercise.sets.map((set, i) => {
@@ -315,7 +327,7 @@ export function WorkoutLogger({
                             <button
                               type="button"
                               className="hidden truncate rounded px-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground sm:block"
-                              title="Copy last session's set"
+                              title={t.logger.copyLastSet}
                               onClick={() =>
                                 prev &&
                                 updateSet(exercise.key, i, {
@@ -343,7 +355,10 @@ export function WorkoutLogger({
                                 })
                               }
                               className="h-9 text-center tabular-nums"
-                              aria-label={`${exercise.name} set ${i + 1} weight`}
+                              aria-label={fmt(t.logger.setWeight, {
+                                name: exercise.name,
+                                number: i + 1,
+                              })}
                             />
                             <Input
                               inputMode="numeric"
@@ -355,7 +370,10 @@ export function WorkoutLogger({
                                 })
                               }
                               className="h-9 text-center tabular-nums"
-                              aria-label={`${exercise.name} set ${i + 1} reps`}
+                              aria-label={fmt(t.logger.setReps, {
+                                name: exercise.name,
+                                number: i + 1,
+                              })}
                             />
                             <Button
                               type="button"
@@ -366,7 +384,7 @@ export function WorkoutLogger({
                                 set.done &&
                                   "bg-emerald-600 text-white hover:bg-emerald-600/90",
                               )}
-                              aria-label="Mark set done"
+                              aria-label={t.logger.markSetDone}
                               onClick={() => {
                                 if (!set.done && !filled && prev) {
                                   updateSet(exercise.key, i, {
@@ -406,7 +424,7 @@ export function WorkoutLogger({
                           )
                         }
                       >
-                        <Plus className="size-4" /> Add set
+                        <Plus className="size-4" /> {t.logger.addSet}
                       </Button>
                     </div>
                   </motion.div>
@@ -419,7 +437,7 @@ export function WorkoutLogger({
               className="w-full border-dashed"
               onClick={() => setPickerOpen(true)}
             >
-              <Plus className="size-4" /> Add exercise
+              <Plus className="size-4" /> {t.logger.addExercise}
             </Button>
           </CardContent>
         </Card>
@@ -435,14 +453,18 @@ export function WorkoutLogger({
             <CardContent className="flex items-center justify-between gap-3 p-3">
               <div className="flex items-center gap-4 pl-1 text-sm">
                 <div>
-                  <div className="text-xs text-muted-foreground">Volume</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t.logger.volume}
+                  </div>
                   <div className="font-semibold tabular-nums">
                     {formatVolume(totalVolume)}
                   </div>
                 </div>
                 <Separator orientation="vertical" className="h-8" />
                 <div>
-                  <div className="text-xs text-muted-foreground">Sets</div>
+                  <div className="text-xs text-muted-foreground">
+                    {t.logger.sets}
+                  </div>
                   <div className="font-semibold tabular-nums">{completedSets}</div>
                 </div>
               </div>
@@ -452,7 +474,7 @@ export function WorkoutLogger({
                 disabled={saving || completedSets === 0}
               >
                 <CheckCheck className="size-4" />
-                {saving ? "Saving…" : "Finish workout"}
+                {saving ? t.logger.saving : t.logger.finishWorkout}
               </Button>
             </CardContent>
           </Card>
@@ -462,32 +484,32 @@ export function WorkoutLogger({
       <CommandDialog
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        title="Add exercise"
-        description="Search your exercise library"
+        title={t.logger.pickerTitle}
+        description={t.logger.pickerDesc}
       >
         <Command>
           <CommandInput
-            placeholder="Search exercises…"
+            placeholder={t.logger.searchPlaceholder}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
-          <CommandEmpty>No exercise found.</CommandEmpty>
+          <CommandEmpty>{t.logger.noExerciseFound}</CommandEmpty>
           {query.trim().length > 1 &&
             !library.some(
               (e) => e.name.toLowerCase() === query.trim().toLowerCase(),
             ) && (
-              <CommandGroup heading="Create">
+              <CommandGroup heading={t.logger.createGroup}>
                 <CommandItem
                   value={`create-${query}`}
                   onSelect={() => addExercise(query.trim())}
                 >
                   <Plus className="size-4" />
-                  Add “{query.trim()}” as a new exercise
+                  {fmt(t.logger.addAsNew, { name: query.trim() })}
                 </CommandItem>
               </CommandGroup>
             )}
-          <CommandGroup heading="Library">
+          <CommandGroup heading={t.logger.libraryGroup}>
             {library.map((exercise) => (
               <CommandItem
                 key={exercise.name}

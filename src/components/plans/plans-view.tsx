@@ -60,6 +60,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useI18n } from "@/components/i18n-provider";
 import {
   createPlan,
   deletePlan,
@@ -67,6 +68,7 @@ import {
   scheduleWorkout,
   updateScheduleStatus,
 } from "@/lib/actions";
+import { fmt } from "@/lib/i18n/config";
 import {
   formatWeekday,
   parseIsoDate,
@@ -92,6 +94,7 @@ export function PlansView({
   exerciseNames: string[];
 }) {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [scheduleFor, setScheduleFor] = useState<{
     date?: string;
@@ -114,13 +117,13 @@ export function PlansView({
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-medium">Schedule</h2>
+            <h2 className="font-medium">{t.plansPage.scheduleHeading}</h2>
             <p className="text-xs text-muted-foreground">
-              This week and next — tap a day to plan it.
+              {t.plansPage.scheduleHint}
             </p>
           </div>
           <Button size="sm" onClick={() => setScheduleFor({})}>
-            <CalendarPlus className="size-4" /> Schedule
+            <CalendarPlus className="size-4" /> {t.plansPage.scheduleButton}
           </Button>
         </div>
 
@@ -144,7 +147,7 @@ export function PlansView({
                       isToday ? "text-primary" : "text-muted-foreground",
                     )}
                   >
-                    {formatWeekday(date)} {parseIsoDate(date).getDate()}
+                    {formatWeekday(date, locale)} {parseIsoDate(date).getDate()}
                   </span>
                   {entries.map((entry) => (
                     <ScheduleChip
@@ -163,13 +166,13 @@ export function PlansView({
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-medium">My plans</h2>
+            <h2 className="font-medium">{t.plansPage.myPlans}</h2>
             <p className="text-xs text-muted-foreground">
-              Build one by hand or let the AI generator draft it.
+              {t.plansPage.myPlansHint}
             </p>
           </div>
           <Button size="sm" variant="secondary" onClick={() => setBuilderOpen(true)}>
-            <Plus className="size-4" /> New plan
+            <Plus className="size-4" /> {t.plansPage.newPlan}
           </Button>
         </div>
 
@@ -177,16 +180,15 @@ export function PlansView({
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
               <p className="max-w-sm text-sm text-muted-foreground">
-                No plans yet. Create one here, or describe your goal on the
-                Generate page and save the result.
+                {t.plansPage.emptyPlans}
               </p>
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => setBuilderOpen(true)}>
-                  <Plus className="size-4" /> Build a plan
+                  <Plus className="size-4" /> {t.plansPage.buildPlan}
                 </Button>
                 <Button size="sm" variant="secondary" asChild>
                   <Link href="/generate">
-                    <Sparkles className="size-4" /> Generate with AI
+                    <Sparkles className="size-4" /> {t.plansPage.generateWithAi}
                   </Link>
                 </Button>
               </div>
@@ -236,6 +238,7 @@ function ScheduleChip({
   entry: ScheduleEntryView;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [, startUpdate] = useTransition();
   const isToday = entry.date === todayIso();
 
@@ -262,7 +265,7 @@ function ScheduleChip({
         {entry.status === "planned" && isToday && (
           <DropdownMenuItem asChild>
             <Link href="/log">
-              <Play className="size-4" /> Start in logger
+              <Play className="size-4" /> {t.plansPage.startInLogger}
             </Link>
           </DropdownMenuItem>
         )}
@@ -275,7 +278,7 @@ function ScheduleChip({
               })
             }
           >
-            <Check className="size-4" /> Mark done
+            <Check className="size-4" /> {t.plansPage.markDone}
           </DropdownMenuItem>
         )}
         {entry.status !== "skipped" && (
@@ -287,7 +290,7 @@ function ScheduleChip({
               })
             }
           >
-            <X className="size-4" /> Mark skipped
+            <X className="size-4" /> {t.plansPage.markSkipped}
           </DropdownMenuItem>
         )}
         {entry.status !== "planned" && (
@@ -299,7 +302,7 @@ function ScheduleChip({
               })
             }
           >
-            Reset to planned
+            {t.plansPage.resetToPlanned}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
@@ -312,7 +315,7 @@ function ScheduleChip({
             })
           }
         >
-          <Trash2 className="size-4" /> Remove
+          <Trash2 className="size-4" /> {t.plansPage.remove}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -328,6 +331,7 @@ function PlanCard({
   onSchedule: (planDayId: number) => void;
   onDeleted: () => void;
 }) {
+  const { t } = useI18n();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, startDeleting] = useTransition();
   const totalExercises = plan.days.reduce((n, d) => n + d.exercises.length, 0);
@@ -339,8 +343,11 @@ function PlanCard({
           <div>
             <CardTitle className="text-base">{plan.name}</CardTitle>
             <CardDescription>
-              {plan.days.length} day{plan.days.length === 1 ? "" : "s"} ·{" "}
-              {totalExercises} exercises
+              {plan.days.length}{" "}
+              {plan.days.length === 1
+                ? t.plansPage.daySingular
+                : t.plansPage.dayPlural}{" "}
+              · {fmt(t.plansPage.exercisesCount, { count: totalExercises })}
             </CardDescription>
           </div>
           <div className="flex items-center gap-1">
@@ -353,7 +360,7 @@ function PlanCard({
               variant="ghost"
               size="icon"
               className="size-7 text-muted-foreground"
-              aria-label={`Delete plan ${plan.name}`}
+              aria-label={fmt(t.plansPage.deletePlanAria, { name: plan.name })}
               onClick={() => setConfirmOpen(true)}
             >
               <Trash2 className="size-4" />
@@ -372,7 +379,9 @@ function PlanCard({
                 <span className="flex flex-1 items-center justify-between pr-2">
                   {day.name}
                   <span className="text-xs font-normal text-muted-foreground">
-                    {day.exercises.length} exercises
+                    {fmt(t.plansPage.exercisesCount, {
+                      count: day.exercises.length,
+                    })}
                   </span>
                 </span>
               </AccordionTrigger>
@@ -386,7 +395,11 @@ function PlanCard({
                       <span>{exercise.exerciseName}</span>
                       <span className="text-xs tabular-nums text-muted-foreground">
                         {exercise.sets} × {exercise.reps}
-                        {exercise.restSec ? ` · ${exercise.restSec}s rest` : ""}
+                        {exercise.restSec
+                          ? ` · ${fmt(t.plansPage.restSuffix, {
+                              sec: exercise.restSec,
+                            })}`
+                          : ""}
                       </span>
                     </li>
                   ))}
@@ -397,7 +410,7 @@ function PlanCard({
                   className="mt-3"
                   onClick={() => onSchedule(day.id)}
                 >
-                  <CalendarPlus className="size-4" /> Schedule this day
+                  <CalendarPlus className="size-4" /> {t.plansPage.scheduleThisDay}
                 </Button>
               </AccordionContent>
             </AccordionItem>
@@ -408,15 +421,14 @@ function PlanCard({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete “{plan.name}”?</DialogTitle>
-            <DialogDescription>
-              The plan and its scheduled days will be removed. Logged workouts
-              stay untouched.
-            </DialogDescription>
+            <DialogTitle>
+              {fmt(t.plansPage.deletePlanTitle, { name: plan.name })}
+            </DialogTitle>
+            <DialogDescription>{t.plansPage.deletePlanDesc}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button
               variant="destructive"
@@ -425,7 +437,7 @@ function PlanCard({
                 startDeleting(async () => {
                   const result = await deletePlan(plan.id);
                   if (result.ok) {
-                    toast.success("Plan deleted.");
+                    toast.success(t.plansPage.planDeleted);
                     onDeleted();
                   } else {
                     toast.error(result.error);
@@ -433,7 +445,7 @@ function PlanCard({
                 })
               }
             >
-              {deleting ? "Deleting…" : "Delete"}
+              {deleting ? t.common.deleting : t.common.delete}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -456,10 +468,14 @@ function PlanBuilderDialog({
   exerciseNames: string[];
   onCreated: () => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [days, setDays] = useState<BuilderDay[]>([
-    { name: "Day 1", exercises: [{ name: "", sets: "3", reps: "8-12" }] },
+  const [days, setDays] = useState<BuilderDay[]>(() => [
+    {
+      name: fmt(t.planBuilder.dayDefault, { number: 1 }),
+      exercises: [{ name: "", sets: "3", reps: "8-12" }],
+    },
   ]);
   const [saving, startSaving] = useTransition();
 
@@ -488,12 +504,15 @@ function PlanBuilderDialog({
     startSaving(async () => {
       const result = await createPlan(input);
       if (result.ok) {
-        toast.success(`Plan “${name.trim()}” created.`);
+        toast.success(fmt(t.planBuilder.created, { name: name.trim() }));
         onOpenChange(false);
         setName("");
         setDescription("");
         setDays([
-          { name: "Day 1", exercises: [{ name: "", sets: "3", reps: "8-12" }] },
+          {
+            name: fmt(t.planBuilder.dayDefault, { number: 1 }),
+            exercises: [{ name: "", sets: "3", reps: "8-12" }],
+          },
         ]);
         onCreated();
       } else {
@@ -506,11 +525,8 @@ function PlanBuilderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>New workout plan</DialogTitle>
-          <DialogDescription>
-            Name the plan, add training days, then list exercises with target
-            sets × reps.
-          </DialogDescription>
+          <DialogTitle>{t.planBuilder.title}</DialogTitle>
+          <DialogDescription>{t.planBuilder.desc}</DialogDescription>
         </DialogHeader>
 
         <datalist id="exercise-suggestions">
@@ -522,21 +538,21 @@ function PlanBuilderDialog({
         <div className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
-              <Label htmlFor="plan-name">Plan name</Label>
+              <Label htmlFor="plan-name">{t.planBuilder.planName}</Label>
               <Input
                 id="plan-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Push Pull Legs"
+                placeholder={t.planBuilder.planNamePlaceholder}
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="plan-desc">Description (optional)</Label>
+              <Label htmlFor="plan-desc">{t.planBuilder.description}</Label>
               <Input
                 id="plan-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Goal, progression notes…"
+                placeholder={t.planBuilder.descriptionPlaceholder}
               />
             </div>
           </div>
@@ -548,14 +564,16 @@ function PlanBuilderDialog({
                   value={day.name}
                   onChange={(e) => updateDay(dayIndex, { name: e.target.value })}
                   className="h-8 max-w-48 font-medium"
-                  aria-label={`Day ${dayIndex + 1} name`}
+                  aria-label={fmt(t.planBuilder.dayNameAria, {
+                    number: dayIndex + 1,
+                  })}
                 />
                 {days.length > 1 && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="ml-auto size-7 text-muted-foreground"
-                    aria-label="Remove day"
+                    aria-label={t.planBuilder.removeDay}
                     onClick={() =>
                       setDays((prev) => prev.filter((_, i) => i !== dayIndex))
                     }
@@ -574,7 +592,7 @@ function PlanBuilderDialog({
                     <Input
                       list="exercise-suggestions"
                       value={exercise.name}
-                      placeholder="Exercise name"
+                      placeholder={t.planBuilder.exercisePlaceholder}
                       className="h-8"
                       onChange={(e) =>
                         updateDay(dayIndex, {
@@ -587,7 +605,7 @@ function PlanBuilderDialog({
                     <Input
                       inputMode="numeric"
                       value={exercise.sets}
-                      aria-label="Sets"
+                      aria-label={t.planBuilder.setsAria}
                       className="h-8 text-center"
                       onChange={(e) =>
                         updateDay(dayIndex, {
@@ -599,7 +617,7 @@ function PlanBuilderDialog({
                     />
                     <Input
                       value={exercise.reps}
-                      aria-label="Reps"
+                      aria-label={t.planBuilder.repsAria}
                       className="h-8 text-center"
                       onChange={(e) =>
                         updateDay(dayIndex, {
@@ -613,7 +631,7 @@ function PlanBuilderDialog({
                       variant="ghost"
                       size="icon"
                       className="size-7 text-muted-foreground"
-                      aria-label="Remove exercise"
+                      aria-label={t.planBuilder.removeExercise}
                       onClick={() =>
                         updateDay(dayIndex, {
                           exercises: day.exercises.filter((_, i) => i !== exIndex),
@@ -637,7 +655,7 @@ function PlanBuilderDialog({
                     })
                   }
                 >
-                  <Plus className="size-4" /> Add exercise
+                  <Plus className="size-4" /> {t.planBuilder.addExercise}
                 </Button>
               </div>
             </div>
@@ -650,13 +668,15 @@ function PlanBuilderDialog({
               setDays((prev) => [
                 ...prev,
                 {
-                  name: `Day ${prev.length + 1}`,
+                  name: fmt(t.planBuilder.dayDefault, {
+                    number: prev.length + 1,
+                  }),
                   exercises: [{ name: "", sets: "3", reps: "8-12" }],
                 },
               ])
             }
           >
-            <Plus className="size-4" /> Add day
+            <Plus className="size-4" /> {t.planBuilder.addDay}
           </Button>
         </div>
 
@@ -665,7 +685,7 @@ function PlanBuilderDialog({
             onClick={submit}
             disabled={saving || name.trim().length === 0}
           >
-            {saving ? "Creating…" : "Create plan"}
+            {saving ? t.planBuilder.creating : t.planBuilder.create}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -684,6 +704,7 @@ function ScheduleDialog({
   dayOptions: DayOption[];
   onScheduled: () => void;
 }) {
+  const { locale, t } = useI18n();
   const open = state !== null;
   const [date, setDate] = useState<Date | undefined>(undefined);
   const [selection, setSelection] = useState<string>("custom");
@@ -706,9 +727,9 @@ function ScheduleDialog({
     const planDayId = selection === "custom" ? null : Number(selection);
     const label =
       selection === "custom"
-        ? customLabel.trim() || "Workout"
+        ? customLabel.trim() || t.common.workout
         : (dayOptions.find((d) => d.id === planDayId)?.label.split(" — ")[1] ??
-          "Workout");
+          t.common.workout);
 
     startSaving(async () => {
       const result = await scheduleWorkout({
@@ -718,11 +739,14 @@ function ScheduleDialog({
       });
       if (result.ok) {
         toast.success(
-          `Scheduled “${label}” for ${date.toLocaleDateString(undefined, {
-            weekday: "long",
-            month: "short",
-            day: "numeric",
-          })}.`,
+          fmt(t.scheduleDialog.scheduled, {
+            label,
+            date: date.toLocaleDateString(locale, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            }),
+          }),
         );
         onOpenChange(false);
         setCustomLabel("");
@@ -737,25 +761,23 @@ function ScheduleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Schedule a workout</DialogTitle>
-          <DialogDescription>
-            Pick a date and what you&apos;ll train.
-          </DialogDescription>
+          <DialogTitle>{t.scheduleDialog.title}</DialogTitle>
+          <DialogDescription>{t.scheduleDialog.desc}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label>Date</Label>
+            <Label>{t.scheduleDialog.date}</Label>
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="justify-between font-normal">
                   {date
-                    ? date.toLocaleDateString(undefined, {
+                    ? date.toLocaleDateString(locale, {
                         weekday: "long",
                         month: "long",
                         day: "numeric",
                       })
-                    : "Pick a date"}
+                    : t.scheduleDialog.pickDate}
                   <ChevronDown className="size-4 opacity-60" />
                 </Button>
               </PopoverTrigger>
@@ -773,13 +795,15 @@ function ScheduleDialog({
           </div>
 
           <div className="grid gap-1.5">
-            <Label>Workout</Label>
+            <Label>{t.scheduleDialog.workout}</Label>
             <Select value={selection} onValueChange={setSelection}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="custom">Custom (just a label)</SelectItem>
+                <SelectItem value="custom">
+                  {t.scheduleDialog.customOption}
+                </SelectItem>
                 {dayOptions.map((option) => (
                   <SelectItem key={option.id} value={String(option.id)}>
                     {option.label}
@@ -791,12 +815,12 @@ function ScheduleDialog({
 
           {selection === "custom" && (
             <div className="grid gap-1.5">
-              <Label htmlFor="schedule-label">Label</Label>
+              <Label htmlFor="schedule-label">{t.scheduleDialog.label}</Label>
               <Input
                 id="schedule-label"
                 value={customLabel}
                 onChange={(e) => setCustomLabel(e.target.value)}
-                placeholder="e.g. Cardio + abs"
+                placeholder={t.scheduleDialog.labelPlaceholder}
               />
             </div>
           )}
@@ -804,7 +828,7 @@ function ScheduleDialog({
 
         <DialogFooter>
           <Button onClick={submit} disabled={saving || !date}>
-            {saving ? "Scheduling…" : "Schedule"}
+            {saving ? t.scheduleDialog.submitting : t.scheduleDialog.submit}
           </Button>
         </DialogFooter>
       </DialogContent>

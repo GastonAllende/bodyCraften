@@ -5,6 +5,7 @@ import { useSpring } from "motion/react";
 import { Dumbbell, Flame, TrendingDown, TrendingUp, Trophy, Weight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useI18n } from "@/components/i18n-provider";
 import { Stagger, StaggerItem } from "@/components/motion";
 import { formatVolume } from "@/lib/overload";
 
@@ -42,20 +43,21 @@ export function StatCards({
   streakDays: number;
   prsLast30Days: number;
 }) {
+  const { t } = useI18n();
   const stats = [
     {
-      label: "Workouts this week",
+      label: t.stats.workoutsThisWeek,
       icon: Dumbbell,
       content: <AnimatedNumber value={workoutsThisWeek} />,
-      foot: "Consistency beats intensity",
+      foot: t.stats.workoutsThisWeekFoot,
     },
     {
-      label: "Volume this week",
+      label: t.stats.volumeThisWeek,
       icon: Weight,
       content: <AnimatedNumber value={volumeThisWeek} format={formatVolume} />,
       foot:
         volumeDeltaPct === null ? (
-          "vs. last week: no data"
+          t.stats.vsLastWeekNoData
         ) : (
           <span className="inline-flex items-center gap-1">
             {volumeDeltaPct >= 0 ? (
@@ -64,21 +66,22 @@ export function StatCards({
               <TrendingDown className="size-3.5 text-red-500" />
             )}
             {volumeDeltaPct >= 0 ? "+" : ""}
-            {volumeDeltaPct}% vs. last week
+            {volumeDeltaPct}
+            {t.stats.vsLastWeek}
           </span>
         ),
     },
     {
-      label: "Day streak",
+      label: t.stats.dayStreak,
       icon: Flame,
       content: <AnimatedNumber value={streakDays} />,
-      foot: streakDays > 0 ? "Keep it burning" : "Today is a great day to start",
+      foot: streakDays > 0 ? t.stats.streakKeep : t.stats.streakStart,
     },
     {
-      label: "PRs last 30 days",
+      label: t.stats.prsLast30Days,
       icon: Trophy,
       content: <AnimatedNumber value={prsLast30Days} />,
-      foot: "Estimated 1RM records",
+      foot: t.stats.prsFoot,
     },
   ];
 
@@ -109,10 +112,12 @@ export function StatCards({
 }
 
 export function PrBadge({ count }: { count: number }) {
+  const { t } = useI18n();
   if (count <= 0) return null;
   return (
     <Badge className="gap-1 bg-amber-500/15 text-amber-600 hover:bg-amber-500/20 dark:text-amber-400">
-      <Trophy className="size-3" /> {count} PR{count > 1 ? "s" : ""}
+      <Trophy className="size-3" /> {count}{" "}
+      {count > 1 ? t.stats.prPlural : t.stats.prSingular}
     </Badge>
   );
 }

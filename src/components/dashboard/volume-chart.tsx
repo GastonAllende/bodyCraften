@@ -7,26 +7,28 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { useI18n } from "@/components/i18n-provider";
 import { formatVolume } from "@/lib/overload";
-
-const chartConfig = {
-  volume: { label: "Volume (kg)", color: "var(--chart-1)" },
-} satisfies ChartConfig;
 
 export function VolumeChart({
   data,
 }: {
   data: { week: string; volume: number }[];
 }) {
+  const { t } = useI18n();
   const hasData = data.some((d) => d.volume > 0);
 
   if (!hasData) {
     return (
       <div className="flex h-56 items-center justify-center text-sm text-muted-foreground">
-        Log a few workouts and your weekly training volume will show up here.
+        {t.charts.volumeEmpty}
       </div>
     );
   }
+
+  const chartConfig = {
+    volume: { label: t.charts.volumeLabel, color: "var(--chart-1)" },
+  } satisfies ChartConfig;
 
   return (
     <ChartContainer config={chartConfig} className="h-56 w-full">

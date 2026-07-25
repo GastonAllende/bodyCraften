@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
+import { useI18n } from "@/components/i18n-provider";
 import { NAV_ITEMS, isActive } from "@/components/nav-items";
 import {
   Breadcrumb,
@@ -13,6 +14,7 @@ import {
 
 export function AppBreadcrumb() {
   const pathname = usePathname();
+  const { t } = useI18n();
   const current =
     NAV_ITEMS.find((item) => isActive(pathname, item.href)) ?? NAV_ITEMS[0];
 
@@ -24,7 +26,7 @@ export function AppBreadcrumb() {
         </BreadcrumbItem>
         <BreadcrumbSeparator className="hidden md:block" />
         <BreadcrumbItem>
-          <BreadcrumbPage>{current.label}</BreadcrumbPage>
+          <BreadcrumbPage>{t.nav[current.labelKey]}</BreadcrumbPage>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>

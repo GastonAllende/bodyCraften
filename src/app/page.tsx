@@ -14,11 +14,14 @@ import { StatCards, PrBadge } from "@/components/dashboard/stat-cards";
 import { VolumeChart } from "@/components/dashboard/volume-chart";
 import { ProgressChart } from "@/components/dashboard/progress-chart";
 import { getDashboardData } from "@/lib/queries";
+import { fmt } from "@/lib/i18n/config";
+import { getDictionary, getLocale } from "@/lib/i18n/server";
 import { formatShortDate, formatVolume } from "@/lib/overload";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const [t, locale] = await Promise.all([getDictionary(), getLocale()]);
   const data = getDashboardData();
   const plannedToday = data.todaysEntries.filter((e) => e.status === "planned");
 
@@ -26,14 +29,16 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <FadeIn className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {t.dashboard.title}
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Track your training and keep the weights moving up.
+            {t.dashboard.subtitle}
           </p>
         </div>
         <Button asChild>
           <Link href="/log">
-            <Plus className="size-4" /> Log workout
+            <Plus className="size-4" /> {t.dashboard.logWorkout}
           </Link>
         </Button>
       </FadeIn>
@@ -48,18 +53,22 @@ export default async function DashboardPage() {
                 </span>
                 <div>
                   <div className="text-sm font-medium">
-                    Today&apos;s plan: {plannedToday.map((e) => e.label).join(" · ")}
+                    {fmt(t.dashboard.todaysPlan, {
+                      labels: plannedToday.map((e) => e.label).join(" · "),
+                    })}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {plannedToday[0].planName
-                      ? `From “${plannedToday[0].planName}” — it will prefill your logger.`
-                      : "Scheduled for today — it will prefill your logger."}
+                      ? fmt(t.dashboard.prefillFromPlan, {
+                          plan: plannedToday[0].planName,
+                        })
+                      : t.dashboard.prefillScheduled}
                   </div>
                 </div>
               </div>
               <Button asChild size="sm" variant="default">
                 <Link href="/log">
-                  Start now <ArrowRight className="size-4" />
+                  {t.dashboard.startNow} <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </CardContent>
@@ -79,10 +88,10 @@ export default async function DashboardPage() {
         <FadeIn delay={0.1}>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Weekly volume</CardTitle>
-              <CardDescription>
-                Total weight lifted per week (last 10 weeks)
-              </CardDescription>
+              <CardTitle className="text-base">
+                {t.dashboard.weeklyVolume}
+              </CardTitle>
+              <CardDescription>{t.dashboard.weeklyVolumeDesc}</CardDescription>
             </CardHeader>
             <CardContent>
               <VolumeChart data={data.weeklyVolume} />
@@ -93,9 +102,11 @@ export default async function DashboardPage() {
         <FadeIn delay={0.15}>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Progressive overload</CardTitle>
+              <CardTitle className="text-base">
+                {t.dashboard.progressiveOverload}
+              </CardTitle>
               <CardDescription>
-                Estimated 1RM and top set per session
+                {t.dashboard.progressiveOverloadDesc}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -111,17 +122,19 @@ export default async function DashboardPage() {
       <FadeIn delay={0.2}>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Recent workouts</CardTitle>
-            <CardDescription>Your last sessions at a glance</CardDescription>
+            <CardTitle className="text-base">
+              {t.dashboard.recentWorkouts}
+            </CardTitle>
+            <CardDescription>{t.dashboard.recentWorkoutsDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             {data.recentWorkouts.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <p className="text-sm text-muted-foreground">
-                  Nothing logged yet. Your first workout is one tap away.
+                  {t.dashboard.emptyRecent}
                 </p>
                 <Button asChild variant="secondary" size="sm">
-                  <Link href="/log">Log your first workout</Link>
+                  <Link href="/log">{t.dashboard.logFirstWorkout}</Link>
                 </Button>
               </div>
             ) : (
@@ -143,13 +156,15 @@ export default async function DashboardPage() {
                         <div className="truncate text-xs text-muted-foreground">
                           {exerciseNames.slice(0, 4).join(" · ")}
                           {exerciseNames.length > 4 &&
-                            ` · +${exerciseNames.length - 4} more`}
+                            ` · ${fmt(t.dashboard.moreExercises, {
+                              count: exerciseNames.length - 4,
+                            })}`}
                         </div>
                       </div>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <Badge variant="outline">{formatVolume(w.volume)}</Badge>
                         <span className="tabular-nums">
-                          {formatShortDate(w.date)}
+                          {formatShortDate(w.date, locale)}
                         </span>
                       </div>
                     </li>

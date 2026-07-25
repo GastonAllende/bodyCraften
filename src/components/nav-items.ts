@@ -6,19 +6,20 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 export type NavItem = {
   href: string;
-  label: string;
+  labelKey: keyof Dictionary["nav"];
   icon: LucideIcon;
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/log", label: "Log", icon: NotebookPen },
-  { href: "/plans", label: "Plans", icon: CalendarRange },
-  { href: "/exercises", label: "Exercises", icon: Dumbbell },
-  { href: "/generate", label: "Generate", icon: Sparkles },
+  { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
+  { href: "/log", labelKey: "log", icon: NotebookPen },
+  { href: "/plans", labelKey: "plans", icon: CalendarRange },
+  { href: "/exercises", labelKey: "exercises", icon: Dumbbell },
+  { href: "/generate", labelKey: "generate", icon: Sparkles },
 ];
 
 export function isActive(pathname: string, href: string) {
