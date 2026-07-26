@@ -42,15 +42,15 @@ export function parseIsoDate(iso: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-export function formatShortDate(iso: string): string {
-  return parseIsoDate(iso).toLocaleDateString(undefined, {
+export function formatShortDate(iso: string, locale?: string): string {
+  return parseIsoDate(iso).toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
   });
 }
 
-export function formatWeekday(iso: string): string {
-  return parseIsoDate(iso).toLocaleDateString(undefined, {
+export function formatWeekday(iso: string, locale?: string): string {
+  return parseIsoDate(iso).toLocaleDateString(locale, {
     weekday: "short",
   });
 }

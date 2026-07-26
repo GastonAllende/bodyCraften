@@ -17,13 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useI18n } from "@/components/i18n-provider";
+import { fmt } from "@/lib/i18n/config";
 import { formatShortDate } from "@/lib/overload";
 import type { ExerciseProgressPoint } from "@/lib/types";
-
-const chartConfig = {
-  bestE1rm: { label: "Est. 1RM (kg)", color: "var(--chart-1)" },
-  topWeight: { label: "Top set (kg)", color: "var(--chart-2)" },
-} satisfies ChartConfig;
 
 export function ProgressChart({
   trackedExercises,
@@ -32,14 +29,19 @@ export function ProgressChart({
   trackedExercises: string[];
   progressByExercise: Record<string, ExerciseProgressPoint[]>;
 }) {
+  const { locale, t } = useI18n();
   const [selected, setSelected] = useState(trackedExercises[0] ?? "");
   const points = progressByExercise[selected] ?? [];
+
+  const chartConfig = {
+    bestE1rm: { label: t.charts.e1rmLabel, color: "var(--chart-1)" },
+    topWeight: { label: t.charts.topSetLabel, color: "var(--chart-2)" },
+  } satisfies ChartConfig;
 
   if (trackedExercises.length === 0) {
     return (
       <div className="flex h-56 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        Once you log an exercise more than once, its strength curve appears
-        here — that&apos;s your progressive overload at a glance.
+        {t.charts.progressEmpty}
       </div>
     );
   }
@@ -48,7 +50,7 @@ export function ProgressChart({
     <div className="space-y-3">
       <Select value={selected} onValueChange={setSelected}>
         <SelectTrigger className="w-full sm:w-64">
-          <SelectValue placeholder="Pick an exercise" />
+          <SelectValue placeholder={t.charts.pickExercise} />
         </SelectTrigger>
         <SelectContent>
           {trackedExercises.map((name) => (
@@ -61,7 +63,7 @@ export function ProgressChart({
 
       {points.length < 2 ? (
         <div className="flex h-48 items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          Log {selected} one more time to draw a trend line.
+          {fmt(t.charts.logOneMore, { name: selected })}
         </div>
       ) : (
         <ChartContainer config={chartConfig} className="h-48 w-full">
@@ -73,7 +75,7 @@ export function ProgressChart({
               axisLine={false}
               tickMargin={8}
               fontSize={11}
-              tickFormatter={(v: string) => formatShortDate(v)}
+              tickFormatter={(v: string) => formatShortDate(v, locale)}
             />
             <YAxis
               tickLine={false}
@@ -85,7 +87,9 @@ export function ProgressChart({
             <ChartTooltip
               content={
                 <ChartTooltipContent
-                  labelFormatter={(value) => formatShortDate(String(value))}
+                  labelFormatter={(value) =>
+                    formatShortDate(String(value), locale)
+                  }
                 />
               }
             />

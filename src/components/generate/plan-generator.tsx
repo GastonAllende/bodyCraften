@@ -17,18 +17,14 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useI18n } from "@/components/i18n-provider";
 import { createPlan } from "@/lib/actions";
+import { fmt } from "@/lib/i18n/config";
 import type { GeneratedPlan } from "@/lib/types";
-
-const EXAMPLES = [
-  "3-day push/pull/legs for an intermediate lifter, 60 minute sessions",
-  "4 days per week, dumbbells only at home, goal: build muscle",
-  "Full-body strength twice a week for a beginner with limited time",
-  "5 days, hypertrophy focus, no deadlifts (lower back issues)",
-];
 
 export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
   const router = useRouter();
+  const { t } = useI18n();
   const [prompt, setPrompt] = useState("");
   const [plan, setPlan] = useState<GeneratedPlan | null>(null);
   const [isDemo, setIsDemo] = useState(false);
@@ -37,7 +33,7 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
 
   async function generate() {
     if (prompt.trim().length < 8) {
-      toast.error("Describe your workout in a sentence or two first.");
+      toast.error(t.generatePage.promptTooShort);
       return;
     }
     setLoading(true);
@@ -54,13 +50,13 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
         error?: string;
       };
       if (!res.ok || !data.plan) {
-        toast.error(data.error ?? "Couldn't generate a plan. Try again.");
+        toast.error(data.error ?? t.generatePage.generateFailed);
         return;
       }
       setPlan(data.plan);
       setIsDemo(Boolean(data.demo));
     } catch {
-      toast.error("Network error — is the dev server still running?");
+      toast.error(t.generatePage.networkError);
     } finally {
       setLoading(false);
     }
@@ -85,8 +81,8 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
         })),
       });
       if (result.ok) {
-        toast.success(`“${plan.name}” saved to your plans.`, {
-          description: "Schedule its days from the Plans page.",
+        toast.success(fmt(t.generatePage.savedToPlans, { name: plan.name }), {
+          description: t.generatePage.savedToPlansDesc,
         });
         router.push("/plans");
       } else {
@@ -100,33 +96,31 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
       {!aiEnabled && (
         <Alert>
           <Info className="size-4" />
-          <AlertTitle>Demo mode</AlertTitle>
+          <AlertTitle>{t.generatePage.demoMode}</AlertTitle>
           <AlertDescription>
-            No ANTHROPIC_API_KEY configured yet, so plans are built by a simple
-            local template. Add the key to <code>.env.local</code> (see README)
-            and this page generates truly personalized plans with Claude.
+            {t.generatePage.demoDescBefore} <code>.env.local</code>{" "}
+            {t.generatePage.demoDescAfter}
           </AlertDescription>
         </Alert>
       )}
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Describe your training</CardTitle>
-          <CardDescription>
-            Days per week, equipment, experience, time per session, goals,
-            anything to avoid — the more detail, the better the plan.
-          </CardDescription>
+          <CardTitle className="text-base">
+            {t.generatePage.describeTitle}
+          </CardTitle>
+          <CardDescription>{t.generatePage.describeDesc}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <Textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder='e.g. "I can train 3 days a week after work for 45 minutes. I have access to a full gym. Goal is overall muscle and a stronger bench press. I am a beginner."'
+            placeholder={t.generatePage.promptPlaceholder}
             rows={4}
             className="resize-none"
           />
           <div className="flex flex-wrap gap-1.5">
-            {EXAMPLES.map((example) => (
+            {t.generatePage.examples.map((example) => (
               <button
                 key={example}
                 type="button"
@@ -140,7 +134,7 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
           <div className="flex justify-end">
             <Button onClick={generate} disabled={loading}>
               <Sparkles className="size-4" />
-              {loading ? "Generating…" : "Generate plan"}
+              {loading ? t.generatePage.generating : t.generatePage.generate}
             </Button>
           </div>
         </CardContent>
@@ -177,7 +171,9 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-base">{plan.name}</CardTitle>
-                  {isDemo && <Badge variant="secondary">demo</Badge>}
+                  {isDemo && (
+                    <Badge variant="secondary">{t.generatePage.demoBadge}</Badge>
+                  )}
                   {!isDemo && (
                     <Badge className="gap-1 bg-violet-500/15 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400">
                       <Sparkles className="size-3" /> AI
@@ -235,14 +231,14 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
 
                 <div className="flex flex-wrap justify-end gap-2 pt-1">
                   <Button variant="ghost" onClick={() => setPlan(null)}>
-                    Discard
+                    {t.generatePage.discard}
                   </Button>
                   <Button variant="secondary" onClick={generate}>
-                    <RotateCcw className="size-4" /> Regenerate
+                    <RotateCcw className="size-4" /> {t.generatePage.regenerate}
                   </Button>
                   <Button onClick={savePlan} disabled={saving}>
                     <Save className="size-4" />
-                    {saving ? "Saving…" : "Save as plan"}
+                    {saving ? t.generatePage.saving : t.generatePage.saveAsPlan}
                   </Button>
                 </div>
               </CardContent>

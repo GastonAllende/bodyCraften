@@ -1,23 +1,27 @@
 import type { Metadata } from "next";
 import { FadeIn } from "@/components/motion";
 import { PlanGenerator } from "@/components/generate/plan-generator";
+import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Generate a plan" };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return { title: t.metadata.generateTitle };
+}
 
-export default function GeneratePage() {
+export default async function GeneratePage() {
+  const t = await getDictionary();
   const aiEnabled = Boolean(process.env.ANTHROPIC_API_KEY);
 
   return (
     <div className="space-y-6">
       <FadeIn>
         <h1 className="text-2xl font-semibold tracking-tight">
-          Generate a plan
+          {t.generatePage.title}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Describe your goals in plain words — get a structured weekly plan you
-          can save and schedule.
+          {t.generatePage.subtitle}
         </p>
       </FadeIn>
 
