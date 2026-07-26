@@ -8,6 +8,7 @@ import {
   CalendarPlus,
   Check,
   ChevronDown,
+  Pencil,
   Play,
   Plus,
   Sparkles,
@@ -66,6 +67,7 @@ import {
   deletePlan,
   deleteScheduleEntry,
   scheduleWorkout,
+  updatePlan,
   updateScheduleStatus,
 } from "@/lib/actions";
 import { fmt } from "@/lib/i18n/config";
@@ -76,6 +78,12 @@ import {
   todayIso,
 } from "@/lib/overload";
 import { cn } from "@/lib/utils";
+import {
+  isPositiveInteger,
+  isValidRepRange,
+  sanitizeInteger,
+  sanitizeRepRange,
+} from "@/lib/validation";
 import type {
   PlanInput,
   PlanWithDays,
@@ -205,8 +213,9 @@ export function PlansView({
               >
                 <PlanCard
                   plan={plan}
+                  exerciseNames={exerciseNames}
                   onSchedule={(planDayId) => setScheduleFor({ planDayId })}
-                  onDeleted={() => router.refresh()}
+                  onChanged={() => router.refresh()}
                 />
               </motion.div>
             ))}
@@ -218,7 +227,7 @@ export function PlansView({
         open={builderOpen}
         onOpenChange={setBuilderOpen}
         exerciseNames={exerciseNames}
-        onCreated={() => router.refresh()}
+        onSaved={() => router.refresh()}
       />
 
       <ScheduleDialog
@@ -324,15 +333,18 @@ function ScheduleChip({
 
 function PlanCard({
   plan,
+  exerciseNames,
   onSchedule,
-  onDeleted,
+  onChanged,
 }: {
   plan: PlanWithDays;
+  exerciseNames: string[];
   onSchedule: (planDayId: number) => void;
-  onDeleted: () => void;
+  onChanged: () => void;
 }) {
   const { t } = useI18n();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [deleting, startDeleting] = useTransition();
   const totalExercises = plan.days.reduce((n, d) => n + d.exercises.length, 0);
 
@@ -356,6 +368,15 @@ function PlanCard({
                 <Sparkles className="size-3" /> AI
               </Badge>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7 text-muted-foreground"
+              aria-label={fmt(t.plansPage.editPlanAria, { name: plan.name })}
+              onClick={() => setEditOpen(true)}
+            >
+              <Pencil className="size-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -418,6 +439,17 @@ function PlanCard({
         </Accordion>
       </CardContent>
 
+      {/* Mounted only while open so it always seeds from the current plan. */}
+      {editOpen && (
+        <PlanBuilderDialog
+          open
+          onOpenChange={setEditOpen}
+          exerciseNames={exerciseNames}
+          plan={plan}
+          onSaved={onChanged}
+        />
+      )}
+
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -438,7 +470,7 @@ function PlanCard({
                   const result = await deletePlan(plan.id);
                   if (result.ok) {
                     toast.success(t.plansPage.planDeleted);
-                    onDeleted();
+                    onChanged();
                   } else {
                     toast.error(result.error);
                   }
@@ -454,29 +486,59 @@ function PlanCard({
   );
 }
 
-type BuilderExercise = { name: string; sets: string; reps: string };
-type BuilderDay = { name: string; exercises: BuilderExercise[] };
+/** Rest and notes are not editable here, but they ride along so an edit
+ *  doesn't wipe what the AI generator prescribed. */
+type BuilderExercise = {
+  name: string;
+  sets: string;
+  reps: string;
+  restSec: number | null;
+  notes: string | null;
+};
+/** `id` is set for days that already exist in the database. */
+type BuilderDay = { id?: number; name: string; exercises: BuilderExercise[] };
+
+function emptyExercise(): BuilderExercise {
+  return { name: "", sets: "3", reps: "8-12", restSec: null, notes: null };
+}
 
 function PlanBuilderDialog({
   open,
   onOpenChange,
   exerciseNames,
-  onCreated,
+  plan,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   exerciseNames: string[];
-  onCreated: () => void;
+  /** Present when editing an existing plan; absent when creating a new one. */
+  plan?: PlanWithDays;
+  onSaved: () => void;
 }) {
   const { t } = useI18n();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [days, setDays] = useState<BuilderDay[]>(() => [
-    {
-      name: fmt(t.planBuilder.dayDefault, { number: 1 }),
-      exercises: [{ name: "", sets: "3", reps: "8-12" }],
-    },
-  ]);
+  const [name, setName] = useState(plan?.name ?? "");
+  const [description, setDescription] = useState(plan?.description ?? "");
+  const [days, setDays] = useState<BuilderDay[]>(() =>
+    plan
+      ? plan.days.map((day) => ({
+          id: day.id,
+          name: day.name,
+          exercises: day.exercises.map((e) => ({
+            name: e.exerciseName,
+            sets: String(e.sets),
+            reps: e.reps,
+            restSec: e.restSec,
+            notes: e.notes,
+          })),
+        }))
+      : [
+          {
+            name: fmt(t.planBuilder.dayDefault, { number: 1 }),
+            exercises: [emptyExercise()],
+          },
+        ],
+  );
   const [saving, startSaving] = useTransition();
 
   function updateDay(index: number, patch: Partial<BuilderDay>) {
@@ -485,23 +547,54 @@ function PlanBuilderDialog({
     );
   }
 
+  // Only rows with a name get saved, so only those need to hold valid numbers.
+  const namedRows = days.flatMap((d) =>
+    d.exercises.filter((e) => e.name.trim()),
+  );
+  const hasInvalidRow = namedRows.some(
+    (e) => !isPositiveInteger(e.sets) || !isValidRepRange(e.reps),
+  );
+
+  function collectDays() {
+    return days.map((d) => ({
+      id: d.id,
+      name: d.name,
+      exercises: d.exercises
+        .filter((e) => e.name.trim())
+        .map((e) => ({
+          name: e.name,
+          sets: Number(e.sets) || 3,
+          reps: e.reps,
+          restSec: e.restSec ?? undefined,
+          notes: e.notes ?? undefined,
+        })),
+    }));
+  }
+
   function submit() {
-    const input: PlanInput = {
-      name,
-      description: description || undefined,
-      source: "manual",
-      days: days.map((d) => ({
-        name: d.name,
-        exercises: d.exercises
-          .filter((e) => e.name.trim())
-          .map((e) => ({
-            name: e.name,
-            sets: Number(e.sets) || 3,
-            reps: e.reps,
-          })),
-      })),
-    };
     startSaving(async () => {
+      if (plan) {
+        const result = await updatePlan(plan.id, {
+          name,
+          description: description || undefined,
+          days: collectDays(),
+        });
+        if (result.ok) {
+          toast.success(fmt(t.planBuilder.updated, { name: name.trim() }));
+          onOpenChange(false);
+          onSaved();
+        } else {
+          toast.error(result.error);
+        }
+        return;
+      }
+
+      const input: PlanInput = {
+        name,
+        description: description || undefined,
+        source: "manual",
+        days: collectDays(),
+      };
       const result = await createPlan(input);
       if (result.ok) {
         toast.success(fmt(t.planBuilder.created, { name: name.trim() }));
@@ -511,10 +604,10 @@ function PlanBuilderDialog({
         setDays([
           {
             name: fmt(t.planBuilder.dayDefault, { number: 1 }),
-            exercises: [{ name: "", sets: "3", reps: "8-12" }],
+            exercises: [emptyExercise()],
           },
         ]);
-        onCreated();
+        onSaved();
       } else {
         toast.error(result.error);
       }
@@ -525,8 +618,12 @@ function PlanBuilderDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{t.planBuilder.title}</DialogTitle>
-          <DialogDescription>{t.planBuilder.desc}</DialogDescription>
+          <DialogTitle>
+            {plan ? t.planBuilder.editTitle : t.planBuilder.title}
+          </DialogTitle>
+          <DialogDescription>
+            {plan ? t.planBuilder.editDesc : t.planBuilder.desc}
+          </DialogDescription>
         </DialogHeader>
 
         <datalist id="exercise-suggestions">
@@ -584,74 +681,86 @@ function PlanBuilderDialog({
               </div>
 
               <div className="mt-2 space-y-1.5">
-                {day.exercises.map((exercise, exIndex) => (
-                  <div
-                    key={exIndex}
-                    className="grid grid-cols-[1fr_3.5rem_4.5rem_2rem] items-center gap-1.5"
-                  >
-                    <Input
-                      list="exercise-suggestions"
-                      value={exercise.name}
-                      placeholder={t.planBuilder.exercisePlaceholder}
-                      className="h-8"
-                      onChange={(e) =>
-                        updateDay(dayIndex, {
-                          exercises: day.exercises.map((ex, i) =>
-                            i === exIndex ? { ...ex, name: e.target.value } : ex,
-                          ),
-                        })
-                      }
-                    />
-                    <Input
-                      inputMode="numeric"
-                      value={exercise.sets}
-                      aria-label={t.planBuilder.setsAria}
-                      className="h-8 text-center"
-                      onChange={(e) =>
-                        updateDay(dayIndex, {
-                          exercises: day.exercises.map((ex, i) =>
-                            i === exIndex ? { ...ex, sets: e.target.value } : ex,
-                          ),
-                        })
-                      }
-                    />
-                    <Input
-                      value={exercise.reps}
-                      aria-label={t.planBuilder.repsAria}
-                      className="h-8 text-center"
-                      onChange={(e) =>
-                        updateDay(dayIndex, {
-                          exercises: day.exercises.map((ex, i) =>
-                            i === exIndex ? { ...ex, reps: e.target.value } : ex,
-                          ),
-                        })
-                      }
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 text-muted-foreground"
-                      aria-label={t.planBuilder.removeExercise}
-                      onClick={() =>
-                        updateDay(dayIndex, {
-                          exercises: day.exercises.filter((_, i) => i !== exIndex),
-                        })
-                      }
+                {day.exercises.map((exercise, exIndex) => {
+                  // A blank row is simply dropped on save — don't nag about it.
+                  const named = exercise.name.trim().length > 0;
+                  return (
+                    <div
+                      key={exIndex}
+                      className="grid grid-cols-[1fr_3.5rem_4.5rem_2rem] items-center gap-1.5"
                     >
-                      <X className="size-4" />
-                    </Button>
-                  </div>
-                ))}
+                      <Input
+                        list="exercise-suggestions"
+                        value={exercise.name}
+                        placeholder={t.planBuilder.exercisePlaceholder}
+                        className="h-8"
+                        onChange={(e) =>
+                          updateDay(dayIndex, {
+                            exercises: day.exercises.map((ex, i) =>
+                              i === exIndex
+                                ? { ...ex, name: e.target.value }
+                                : ex,
+                            ),
+                          })
+                        }
+                      />
+                      <Input
+                        inputMode="numeric"
+                        value={exercise.sets}
+                        aria-label={t.planBuilder.setsAria}
+                        aria-invalid={named && !isPositiveInteger(exercise.sets)}
+                        className="h-8 text-center"
+                        onChange={(e) =>
+                          updateDay(dayIndex, {
+                            exercises: day.exercises.map((ex, i) =>
+                              i === exIndex
+                                ? { ...ex, sets: sanitizeInteger(e.target.value) }
+                                : ex,
+                            ),
+                          })
+                        }
+                      />
+                      <Input
+                        inputMode="numeric"
+                        value={exercise.reps}
+                        aria-label={t.planBuilder.repsAria}
+                        aria-invalid={named && !isValidRepRange(exercise.reps)}
+                        className="h-8 text-center"
+                        onChange={(e) =>
+                          updateDay(dayIndex, {
+                            exercises: day.exercises.map((ex, i) =>
+                              i === exIndex
+                                ? { ...ex, reps: sanitizeRepRange(e.target.value) }
+                                : ex,
+                            ),
+                          })
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground"
+                        aria-label={t.planBuilder.removeExercise}
+                        onClick={() =>
+                          updateDay(dayIndex, {
+                            exercises: day.exercises.filter(
+                              (_, i) => i !== exIndex,
+                            ),
+                          })
+                        }
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-muted-foreground"
                   onClick={() =>
                     updateDay(dayIndex, {
-                      exercises: [
-                        ...day.exercises,
-                        { name: "", sets: "3", reps: "8-12" },
-                      ],
+                      exercises: [...day.exercises, emptyExercise()],
                     })
                   }
                 >
@@ -671,7 +780,7 @@ function PlanBuilderDialog({
                   name: fmt(t.planBuilder.dayDefault, {
                     number: prev.length + 1,
                   }),
-                  exercises: [{ name: "", sets: "3", reps: "8-12" }],
+                  exercises: [emptyExercise()],
                 },
               ])
             }
@@ -680,12 +789,23 @@ function PlanBuilderDialog({
           </Button>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="sm:items-center">
+          {hasInvalidRow && (
+            <p className="mr-auto text-sm text-destructive">
+              {t.planBuilder.invalidNumbers}
+            </p>
+          )}
           <Button
             onClick={submit}
-            disabled={saving || name.trim().length === 0}
+            disabled={saving || name.trim().length === 0 || hasInvalidRow}
           >
-            {saving ? t.planBuilder.creating : t.planBuilder.create}
+            {plan
+              ? saving
+                ? t.planBuilder.savingLabel
+                : t.planBuilder.save
+              : saving
+                ? t.planBuilder.creating
+                : t.planBuilder.create}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -3,6 +3,7 @@ import {
   Dumbbell,
   LayoutDashboard,
   NotebookPen,
+  Settings,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/plans", labelKey: "plans", icon: CalendarRange },
   { href: "/exercises", labelKey: "exercises", icon: Dumbbell },
   { href: "/generate", labelKey: "generate", icon: Sparkles },
+  { href: "/settings", labelKey: "settings", icon: Settings },
 ];
 
 export function isActive(pathname: string, href: string) {

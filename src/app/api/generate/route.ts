@@ -21,7 +21,10 @@ const planSchema = z.object({
             sets: z.number().int().describe("Number of working sets"),
             reps: z
               .string()
-              .describe('Rep target or range, e.g. "8-12" or "30-60s"'),
+              .regex(/^\d+(-\d+)?$/)
+              .describe(
+                'Rep target as digits only — a count "10" or a range "8-12". Never a unit or word.',
+              ),
             restSec: z.number().int().describe("Rest between sets in seconds"),
             notes: z
               .string()
@@ -41,7 +44,9 @@ Rules:
 - Pick proven compound movements first, then accessories. Use common exercise names.
 - Keep each day realistic: 4-7 exercises for a typical session, fewer if the user is time-constrained.
 - Program for progressive overload: include a concrete progression tip in the plan description.
-- If the user writes in another language, answer exercise names in English but day names and notes in their language.`;
+- Reps must always be digits: a count like "10" or a range like "8-12". For timed holds give an
+  equivalent rep count and put the duration in the notes instead — never write "30-60s" or "AMRAP".
+- If the user writes in another language, answer exercise names in English but the plan name, description, day names and notes in their language.`;
 
 export async function POST(req: Request) {
   let prompt: unknown;
@@ -64,9 +69,11 @@ export async function POST(req: Request) {
   try {
     const client = new Anthropic();
     const response = await client.messages.parse({
-      model: "claude-opus-4-8",
+      // Haiku 4.5 handles this schema-constrained task well at ~1/8 the cost of
+      // Opus. It supports neither `thinking: {type: "adaptive"}` nor `effort` —
+      // both return a 400 — so neither is set here.
+      model: "claude-haiku-4-5",
       max_tokens: 16000,
-      thinking: { type: "adaptive" },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: prompt }],
       output_config: { format: zodOutputFormat(planSchema) },

@@ -35,9 +35,15 @@ Route `params` and `searchParams` are async — await them.
 
 - **`better-sqlite3` is a native, server-only module** (listed in `serverExternalPackages`).
   Never import it client-side. `data/bodycraften.db` is created and seeded automatically.
-- **Both API keys are optional** (`.env.local`, see `.env.example`): without `ANTHROPIC_API_KEY`,
-  plan generation falls back to `src/lib/demo-plan.ts`; without `EXERCISEDB_API_KEY`, the exercise
-  catalog falls back to a built-in seed list. A missing key is not a bug to fix.
+- **`ANTHROPIC_API_KEY` is optional** (`.env.local`, see `.env.example`): without it, plan
+  generation falls back to `src/lib/demo-plan.ts`. A missing key is not a bug to fix.
+- **The exercise catalog is vendored, not fetched.** `src/db/exercises.json` holds the canonical
+  rows and `src/db/exercises.es.json` is a display-only Spanish overlay keyed by the same id;
+  `src/lib/exercise-catalog.ts` merges them per locale. There is no exercise API at runtime.
+- **Exercise names are the join key, so only `displayName` may be translated.** `LibraryExercise.name`
+  is canonical English and is what gets written to `workout_sets.exercise_name` /
+  `plan_exercises.exercise_name`. Storing a localised name splits a user's history when they
+  switch language.
 - **Tailwind is v4 / CSS-first** — the theme lives in `src/app/globals.css` under `@theme`. There
   is no `tailwind.config.*`.
 - **Don't edit `src/components/ui/`** (shadcn-generated) — wrap those components instead. This

@@ -9,15 +9,24 @@ import type {
 
 /** Exercise shape shared by the local library and the external API. */
 export type LibraryExercise = {
+  /**
+   * Canonical English name. This is the join key — it is what gets written to
+   * `workout_sets.exercise_name` / `plan_exercises.exercise_name`. Never store a
+   * translated name here or a user's history splits when they switch language.
+   */
   name: string;
+  /** Localised label for display only; falls back to `name` when absent. */
+  displayName?: string;
   bodyPart: string;
   equipment: string;
   target: string;
   instructions?: string;
+  /** Catalog rows keep the individual steps so they can render as a list. */
+  instructionSteps?: string[];
   source: "built-in" | "api" | "custom";
   /** Present when the exercise is saved in the local library. */
   id?: number;
-  /** True when it comes from the external API and is not saved locally yet. */
+  /** True when it comes from the catalog and is not saved locally yet. */
   remote?: boolean;
 };
 
@@ -45,6 +54,17 @@ export type PlanInput = {
   description?: string;
   source: "manual" | "ai";
   days: { name: string; exercises: PlanExerciseInput[] }[];
+};
+
+/**
+ * Edit payload for an existing plan. Days carry their id so the row survives
+ * the update — dropping and recreating one would cascade-delete every schedule
+ * entry pointing at it. A day without an id is new.
+ */
+export type PlanUpdateInput = {
+  name: string;
+  description?: string;
+  days: { id?: number; name: string; exercises: PlanExerciseInput[] }[];
 };
 
 /** Shape returned by the AI generator (and its demo fallback). */
@@ -92,6 +112,13 @@ export type LastSessionHints = Record<
 >;
 
 export type ExerciseProgressPoint = {
+  /**
+   * `date#workoutId`. The chart's x-axis is categorical, so two sessions on the
+   * same day would collapse onto one category and the tooltip would report the
+   * first one for every point. This keeps each session distinct; the axis and
+   * tooltip render the date half.
+   */
+  sessionKey: string;
   date: string;
   bestE1rm: number;
   topWeight: number;

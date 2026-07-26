@@ -14,7 +14,8 @@ import {
   type Workout,
   type WorkoutSet,
 } from "@/db/schema";
-import { fetchExerciseCatalog } from "@/lib/exercise-api";
+import { getVendoredCatalog } from "@/lib/exercise-catalog";
+import { getLocale } from "@/lib/i18n/server";
 import {
   addDays,
   computeStreak,
@@ -142,6 +143,7 @@ export function getDashboardData(): DashboardData {
       const sets = w.sets.filter((s) => s.exerciseName === name);
       if (sets.length === 0) continue;
       points.push({
+        sessionKey: `${w.date}#${w.id}`,
         date: w.date,
         bestE1rm:
           Math.round(
@@ -200,23 +202,21 @@ export function getLastSessionHints(): LastSessionHints {
     .all();
 
   const hints: LastSessionHints = {};
+  // Rows arrive newest-first, so the first one seen for an exercise belongs to
+  // its most recent session. Keep that workout's id and accept only more rows
+  // from it — matching on date instead would merge every session logged on the
+  // same day, which made the hint (and the logger's prefilled set count) grow
+  // every time the exercise was logged again.
+  const sourceWorkout = new Map<string, number>();
   for (const row of rows) {
-    const existing = hints[row.set.exerciseName];
+    const name = row.set.exerciseName;
+    const set = { weightKg: row.set.weightKg, reps: row.set.reps };
+    const existing = hints[name];
     if (!existing) {
-      hints[row.set.exerciseName] = {
-        date: row.date,
-        sets: [{ weightKg: row.set.weightKg, reps: row.set.reps }],
-      };
-    } else if (existing.date === row.date) {
-      // Only collect sets from the single most recent session.
-      const sameWorkout = rows.find(
-        (r) =>
-          r.set.exerciseName === row.set.exerciseName &&
-          r.workoutId === row.workoutId,
-      );
-      if (sameWorkout) {
-        existing.sets.push({ weightKg: row.set.weightKg, reps: row.set.reps });
-      }
+      hints[name] = { date: row.date, sets: [set] };
+      sourceWorkout.set(name, row.workoutId);
+    } else if (sourceWorkout.get(name) === row.workoutId) {
+      existing.sets.push(set);
     }
   }
   return hints;
@@ -254,6 +254,14 @@ export function getTodaysPrefills(): ScheduledDayPrefill[] {
 
 export function getWorkoutHistory(limit = 30): WorkoutWithSets[] {
   return loadWorkoutsWithSets(limit);
+}
+
+/** How much logged data a history reset would remove. */
+export function getHistorySize(): { workouts: number; sets: number } {
+  return {
+    workouts: db.select({ id: workouts.id }).from(workouts).all().length,
+    sets: db.select({ id: workoutSets.id }).from(workoutSets).all().length,
+  };
 }
 
 export function getPlansWithDays(): PlanWithDays[] {
@@ -319,24 +327,34 @@ export function getUpcomingSchedule(): {
 
 export async function getExerciseCatalogMerged(): Promise<{
   exercises: LibraryExercise[];
-  source: "api" | "built-in";
-  error?: string;
 }> {
-  const catalog = await fetchExerciseCatalog();
+  const catalog = getVendoredCatalog(await getLocale());
   const local = getLibraryExercises();
 
   const merged = new Map<string, LibraryExercise>();
-  for (const e of catalog.exercises) {
+  for (const e of catalog) {
     merged.set(e.name.toLowerCase(), e);
   }
-  // Local entries win: they carry ids and may be custom.
+  // Local entries win on identity (they carry the row id and may be custom),
+  // but a saved row stores one fixed language, so every displayed field comes
+  // from the catalog when the name matches.
   for (const e of local) {
-    merged.set(e.name.toLowerCase(), e);
+    const key = e.name.toLowerCase();
+    const fromCatalog = merged.get(key);
+    merged.set(key, {
+      ...e,
+      displayName: fromCatalog?.displayName,
+      bodyPart: fromCatalog?.bodyPart ?? e.bodyPart,
+      equipment: fromCatalog?.equipment ?? e.equipment,
+      target: fromCatalog?.target ?? e.target,
+      instructions: fromCatalog?.instructions ?? e.instructions,
+      instructionSteps: fromCatalog?.instructionSteps,
+    });
   }
 
   return {
-    exercises: [...merged.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    source: catalog.source,
-    error: catalog.error,
+    exercises: [...merged.values()].sort((a, b) =>
+      (a.displayName ?? a.name).localeCompare(b.displayName ?? b.name),
+    ),
   };
 }

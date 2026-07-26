@@ -21,7 +21,7 @@ exercises.
 | **Dashboard** | Weekly stats, training-volume chart, per-exercise strength curve (est. 1RM), recent sessions, today's scheduled workout. |
 | **Log** | The workout logger. Shows *last session's weight × reps next to every set* so you always know what to beat. Detects PRs on save. Prefills from today's scheduled plan day. |
 | **Plans** | Build multi-day plans, browse them, and schedule plan days on a 2-week calendar strip. |
-| **Exercises** | Exercise library with search and body-part filters. Uses the ExerciseDB API when a key is set, otherwise the built-in catalog. Add custom exercises anytime. |
+| **Exercises** | Exercise library with search and body-part filters over a vendored 1,300-exercise catalog (English + Spanish, no API key needed). Opening an exercise shows step-by-step instructions. Add custom exercises anytime. |
 | **Generate** | Describe your training in plain words → structured weekly plan → save it as a plan. Uses Claude when `ANTHROPIC_API_KEY` is set; otherwise a local demo generator. |
 
 ## API keys (optional)
@@ -30,7 +30,7 @@ Copy `.env.example` to `.env.local`:
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...   # real AI plan generation (https://platform.claude.com/)
-EXERCISEDB_API_KEY=...         # 1,300+ exercise catalog (RapidAPI → ExerciseDB)
+WORKOUTX_API_KEY=...           # only needed to re-sync src/db/exercises*.json
 ```
 
 Restart the dev server after adding keys. Everything degrades gracefully

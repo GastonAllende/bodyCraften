@@ -18,6 +18,7 @@ export const en = {
     plans: "Plans",
     exercises: "Exercises",
     generate: "Generate",
+    settings: "Settings",
   },
   header: {
     toggleTheme: "Toggle theme",
@@ -31,6 +32,7 @@ export const en = {
     plansTitle: "Plans & schedule",
     exercisesTitle: "Exercises",
     generateTitle: "Generate a plan",
+    settingsTitle: "Settings",
   },
   dashboard: {
     title: "Dashboard",
@@ -149,6 +151,7 @@ export const en = {
     daySingular: "day",
     dayPlural: "days",
     exercisesCount: "{count} exercises",
+    editPlanAria: "Edit plan {name}",
     deletePlanAria: "Delete plan {name}",
     deletePlanTitle: "Delete “{name}”?",
     deletePlanDesc:
@@ -173,9 +176,17 @@ export const en = {
     removeExercise: "Remove exercise",
     addExercise: "Add exercise",
     addDay: "Add day",
+    invalidNumbers:
+      "Sets must be a whole number of 1 or more, and reps a count like 10 or a range like 8-12.",
     create: "Create plan",
     creating: "Creating…",
     created: "Plan “{name}” created.",
+    editTitle: "Edit workout plan",
+    editDesc:
+      "Rename days, retarget sets × reps, add or drop exercises. Removing a day also removes it from your calendar.",
+    save: "Save changes",
+    savingLabel: "Saving…",
+    updated: "Plan “{name}” updated.",
   },
   scheduleDialog: {
     title: "Schedule a workout",
@@ -193,17 +204,34 @@ export const en = {
   exercisesPage: {
     title: "Exercise library",
     subtitle: "Browse exercises, save the ones you use, or add your own.",
-    apiUnreachable: "Exercise API unreachable",
-    builtinActive: "Built-in catalog active",
-    apiErrorDesc:
-      "Couldn't reach ExerciseDB ({error}). Showing the built-in catalog instead.",
-    builtinDesc:
-      "Showing the built-in catalog. Add EXERCISEDB_API_KEY to .env.local to browse 1,300+ exercises from the ExerciseDB API — instructions in README.",
     searchPlaceholder: "Search by name, muscle or equipment…",
     all: "All",
+    scopeAll: "All exercises",
+    scopeSaved: "My library ({count})",
+    emptyLibrary:
+      "Your library is empty. Switch to “All exercises” and bookmark the ones you use, or add a custom exercise.",
+    noLibraryMatches: "No exercise in your library matches that search.",
+    removeFromLibraryAria: "Remove {name} from library",
+    removeFromLibrary: "Remove from library",
+    removeTitle: "Remove “{name}” from your library?",
+    removeDesc:
+      "It disappears from your library and from the logger's search. Logged sets and plans that use it keep their history.",
+    removed: "“{name}” removed from your library.",
+    /** Filter-chip labels, keyed by the buckets in `exercise-catalog.ts`. */
+    bodyParts: {
+      arms: "Arms",
+      back: "Back",
+      calves: "Calves",
+      cardio: "Cardio",
+      chest: "Chest",
+      core: "Core",
+      legs: "Legs",
+      neck: "Neck",
+      shoulders: "Shoulders",
+      other: "Other",
+    } as Record<string, string>,
     exerciseSingular: "exercise",
     exercisePlural: "exercises",
-    liveFromApi: " · live from ExerciseDB",
     noMatches:
       "Nothing matches that search — try another term or add it as a custom exercise.",
     showMore: "Show more ({count} left)",
@@ -213,6 +241,7 @@ export const en = {
     targets: "targets",
     noInstructions:
       "No instructions stored for this exercise. Focus on controlled reps and full range of motion.",
+    howToTitle: "How to perform it",
     saveToMyLibrary: "Save to my library",
     savedToLibrary: "“{name}” saved to your library.",
     newExercise: "New exercise",
@@ -263,12 +292,33 @@ export const en = {
     savedToPlans: "“{name}” saved to your plans.",
     savedToPlansDesc: "Schedule its days from the Plans page.",
   },
+  settingsPage: {
+    title: "Settings",
+    subtitle: "Manage the data BodyCraften keeps on this device.",
+    dangerZone: "Danger zone",
+    resetHistoryTitle: "Reset workout history",
+    resetHistoryDesc:
+      "Deletes every logged session and all of its sets. Your plans, your calendar and your exercise library stay exactly as they are.",
+    currentData: "{workouts} workouts · {sets} logged sets",
+    nothingToReset: "Nothing logged yet — there is no history to reset.",
+    resetButton: "Reset history",
+    confirmTitle: "Delete all workout history?",
+    confirmDesc:
+      "{workouts} workouts and {sets} sets will be permanently deleted. Volume, charts, streaks and PRs all go back to zero. This cannot be undone.",
+    confirmCta: "Yes, delete everything",
+    resetting: "Deleting…",
+    resetDone: "History cleared — {count} workouts deleted.",
+  },
   actions: {
     logAtLeastOneSet: "Log at least one set before finishing.",
     giveExerciseName: "Give the exercise a name first.",
     alreadyInLibrary: '"{name}" is already in your library.',
+    notInLibrary: '"{name}" is not in your library.',
     givePlanName: "Give your plan a name.",
     addAtLeastOneDay: "Add at least one day with one exercise.",
+    planNotFound: "That plan no longer exists.",
+    invalidSets: "Sets must be a whole number of 1 or more.",
+    invalidReps: "Reps must be a number like 10 or a range like 8-12.",
     pickDateFirst: "Pick a date first.",
     trainingDay: "Training Day",
     unsupportedLanguage: "That language isn't supported.",
@@ -290,6 +340,7 @@ export const es: Dictionary = {
     plans: "Planes",
     exercises: "Ejercicios",
     generate: "Generar",
+    settings: "Ajustes",
   },
   header: {
     toggleTheme: "Cambiar tema",
@@ -303,6 +354,7 @@ export const es: Dictionary = {
     plansTitle: "Planes y calendario",
     exercisesTitle: "Ejercicios",
     generateTitle: "Generar un plan",
+    settingsTitle: "Ajustes",
   },
   dashboard: {
     title: "Panel",
@@ -423,6 +475,7 @@ export const es: Dictionary = {
     daySingular: "día",
     dayPlural: "días",
     exercisesCount: "{count} ejercicios",
+    editPlanAria: "Editar plan {name}",
     deletePlanAria: "Eliminar plan {name}",
     deletePlanTitle: "¿Eliminar “{name}”?",
     deletePlanDesc:
@@ -447,9 +500,17 @@ export const es: Dictionary = {
     removeExercise: "Quitar ejercicio",
     addExercise: "Añadir ejercicio",
     addDay: "Añadir día",
+    invalidNumbers:
+      "Las series deben ser un número entero de 1 o más, y las repeticiones un número como 10 o un rango como 8-12.",
     create: "Crear plan",
     creating: "Creando…",
     created: "Plan “{name}” creado.",
+    editTitle: "Editar plan de entrenamiento",
+    editDesc:
+      "Renombra días, ajusta series × reps, añade o quita ejercicios. Quitar un día también lo quita de tu calendario.",
+    save: "Guardar cambios",
+    savingLabel: "Guardando…",
+    updated: "Plan “{name}” actualizado.",
   },
   scheduleDialog: {
     title: "Programar un entrenamiento",
@@ -467,17 +528,34 @@ export const es: Dictionary = {
   exercisesPage: {
     title: "Biblioteca de ejercicios",
     subtitle: "Explora ejercicios, guarda los que usas o añade los tuyos.",
-    apiUnreachable: "API de ejercicios inaccesible",
-    builtinActive: "Catálogo integrado activo",
-    apiErrorDesc:
-      "No se pudo conectar con ExerciseDB ({error}). Se muestra el catálogo integrado.",
-    builtinDesc:
-      "Mostrando el catálogo integrado. Añade EXERCISEDB_API_KEY a .env.local para explorar más de 1.300 ejercicios de la API de ExerciseDB — instrucciones en el README.",
     searchPlaceholder: "Buscar por nombre, músculo o equipamiento…",
     all: "Todos",
+    scopeAll: "Todos los ejercicios",
+    scopeSaved: "Mi biblioteca ({count})",
+    emptyLibrary:
+      "Tu biblioteca está vacía. Cambia a “Todos los ejercicios” y guarda los que usas, o añade uno personalizado.",
+    noLibraryMatches:
+      "Ningún ejercicio de tu biblioteca coincide con esa búsqueda.",
+    removeFromLibraryAria: "Quitar {name} de la biblioteca",
+    removeFromLibrary: "Quitar de la biblioteca",
+    removeTitle: "¿Quitar “{name}” de tu biblioteca?",
+    removeDesc:
+      "Desaparecerá de tu biblioteca y de la búsqueda del registro. Las series registradas y los planes que lo usan conservan su historial.",
+    removed: "“{name}” quitado de tu biblioteca.",
+    bodyParts: {
+      arms: "Brazos",
+      back: "Espalda",
+      calves: "Gemelos",
+      cardio: "Cardio",
+      chest: "Pecho",
+      core: "Core",
+      legs: "Piernas",
+      neck: "Cuello",
+      shoulders: "Hombros",
+      other: "Otros",
+    } as Record<string, string>,
     exerciseSingular: "ejercicio",
     exercisePlural: "ejercicios",
-    liveFromApi: " · en vivo desde ExerciseDB",
     noMatches:
       "Nada coincide con esa búsqueda — prueba otro término o añádelo como ejercicio personalizado.",
     showMore: "Mostrar más (quedan {count})",
@@ -487,6 +565,7 @@ export const es: Dictionary = {
     targets: "trabaja",
     noInstructions:
       "No hay instrucciones guardadas para este ejercicio. Concéntrate en repeticiones controladas y rango completo de movimiento.",
+    howToTitle: "Cómo hacerlo",
     saveToMyLibrary: "Guardar en mi biblioteca",
     savedToLibrary: "“{name}” guardado en tu biblioteca.",
     newExercise: "Nuevo ejercicio",
@@ -537,12 +616,34 @@ export const es: Dictionary = {
     savedToPlans: "“{name}” guardado en tus planes.",
     savedToPlansDesc: "Programa sus días desde la página de Planes.",
   },
+  settingsPage: {
+    title: "Ajustes",
+    subtitle: "Gestiona los datos que BodyCraften guarda en este dispositivo.",
+    dangerZone: "Zona de peligro",
+    resetHistoryTitle: "Reiniciar el historial de entrenamientos",
+    resetHistoryDesc:
+      "Elimina todas las sesiones registradas y sus series. Tus planes, tu calendario y tu biblioteca de ejercicios se quedan igual.",
+    currentData: "{workouts} entrenamientos · {sets} series registradas",
+    nothingToReset: "Aún no hay nada registrado — no hay historial que reiniciar.",
+    resetButton: "Reiniciar historial",
+    confirmTitle: "¿Eliminar todo el historial de entrenamientos?",
+    confirmDesc:
+      "Se eliminarán permanentemente {workouts} entrenamientos y {sets} series. El volumen, los gráficos, las rachas y los récords vuelven a cero. Esto no se puede deshacer.",
+    confirmCta: "Sí, eliminar todo",
+    resetting: "Eliminando…",
+    resetDone: "Historial borrado — {count} entrenamientos eliminados.",
+  },
   actions: {
     logAtLeastOneSet: "Registra al menos una serie antes de terminar.",
     giveExerciseName: "Primero ponle un nombre al ejercicio.",
     alreadyInLibrary: "“{name}” ya está en tu biblioteca.",
+    notInLibrary: "“{name}” no está en tu biblioteca.",
     givePlanName: "Ponle un nombre a tu plan.",
     addAtLeastOneDay: "Añade al menos un día con un ejercicio.",
+    planNotFound: "Ese plan ya no existe.",
+    invalidSets: "Las series deben ser un número entero de 1 o más.",
+    invalidReps:
+      "Las repeticiones deben ser un número como 10 o un rango como 8-12.",
     pickDateFirst: "Primero elige una fecha.",
     trainingDay: "Día de entrenamiento",
     unsupportedLanguage: "Ese idioma no está disponible.",

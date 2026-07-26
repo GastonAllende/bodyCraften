@@ -33,6 +33,7 @@ import { saveWorkout } from "@/lib/actions";
 import { fmt } from "@/lib/i18n/config";
 import { formatShortDate, formatVolume, todayIso } from "@/lib/overload";
 import { cn } from "@/lib/utils";
+import { sanitizeDecimal, sanitizeInteger } from "@/lib/validation";
 import type {
   LastSessionHints,
   LibraryExercise,
@@ -351,7 +352,7 @@ export function WorkoutLogger({
                               value={set.weight}
                               onChange={(e) =>
                                 updateSet(exercise.key, i, {
-                                  weight: e.target.value,
+                                  weight: sanitizeDecimal(e.target.value),
                                 })
                               }
                               className="h-9 text-center tabular-nums"
@@ -364,9 +365,12 @@ export function WorkoutLogger({
                               inputMode="numeric"
                               placeholder={prev ? String(prev.reps) : "0"}
                               value={set.reps}
+                              // A blank row is fine — it just isn't logged. A
+                              // typed 0 is a mistake worth pointing at.
+                              aria-invalid={set.reps !== "" && !filled}
                               onChange={(e) =>
                                 updateSet(exercise.key, i, {
-                                  reps: e.target.value,
+                                  reps: sanitizeInteger(e.target.value),
                                 })
                               }
                               className="h-9 text-center tabular-nums"

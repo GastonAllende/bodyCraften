@@ -22,6 +22,11 @@ import { fmt } from "@/lib/i18n/config";
 import { formatShortDate } from "@/lib/overload";
 import type { ExerciseProgressPoint } from "@/lib/types";
 
+/** Points are keyed `date#workoutId` to keep same-day sessions apart. */
+function sessionDate(sessionKey: string) {
+  return sessionKey.split("#")[0];
+}
+
 export function ProgressChart({
   trackedExercises,
   progressByExercise,
@@ -70,12 +75,12 @@ export function ProgressChart({
           <LineChart data={points} margin={{ left: -22, right: 8 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" />
             <XAxis
-              dataKey="date"
+              dataKey="sessionKey"
               tickLine={false}
               axisLine={false}
               tickMargin={8}
               fontSize={11}
-              tickFormatter={(v: string) => formatShortDate(v, locale)}
+              tickFormatter={(v: string) => formatShortDate(sessionDate(v), locale)}
             />
             <YAxis
               tickLine={false}
@@ -88,7 +93,7 @@ export function ProgressChart({
               content={
                 <ChartTooltipContent
                   labelFormatter={(value) =>
-                    formatShortDate(String(value), locale)
+                    formatShortDate(sessionDate(String(value)), locale)
                   }
                 />
               }
