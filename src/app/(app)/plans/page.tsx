@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { FadeIn } from "@/components/motion";
 import { PlansView } from "@/components/plans/plans-view";
+import { requireUserId } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n/server";
 import {
   getLibraryExercises,
@@ -16,10 +17,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function PlansPage() {
+  const userId = await requireUserId();
   const t = await getDictionary();
-  const plans = getPlansWithDays();
-  const schedule = getUpcomingSchedule();
-  const exerciseNames = getLibraryExercises().map((e) => e.name);
+  const [plans, schedule, library] = await Promise.all([
+    getPlansWithDays(userId),
+    getUpcomingSchedule(userId),
+    getLibraryExercises(userId),
+  ]);
+  const exerciseNames = library.map((e) => e.name);
 
   return (
     <div className="space-y-6">

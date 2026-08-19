@@ -1,7 +1,7 @@
 import "server-only";
 
-import { asc, desc, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { getDb } from "@/db";
 import {
   exercises,
   planDays,
@@ -36,13 +36,33 @@ import type {
   WorkoutWithSets,
 } from "@/lib/types";
 
-function loadWorkoutsWithSets(limit?: number): WorkoutWithSets[] {
-  const allWorkouts = db
+/**
+ * Every function here takes `userId` and filters by it — that is the actual
+ * security boundary. RLS is enabled on every table as defense-in-depth, but a
+ * direct Drizzle connection over DATABASE_URL never goes through PostgREST,
+ * so `auth.uid()` is NULL here and RLS has no effect on these queries. Don't
+ * mistake RLS for "already handling it" — if a filter below is dropped, the
+ * query leaks across users regardless of what RLS policies exist.
+ */
+
+async function loadWorkoutsWithSets(
+  userId: string,
+  limit?: number,
+): Promise<WorkoutWithSets[]> {
+  const db = getDb();
+  const allWorkouts = await db
     .select()
     .from(workouts)
-    .orderBy(desc(workouts.date), desc(workouts.id))
-    .all();
-  const allSets = db.select().from(workoutSets).all();
+    .where(eq(workouts.userId, userId))
+    .orderBy(desc(workouts.date), desc(workouts.id));
+
+  const workoutIds = allWorkouts.map((w) => w.id);
+  const allSets = workoutIds.length
+    ? await db
+        .select()
+        .from(workoutSets)
+        .where(inArray(workoutSets.workoutId, workoutIds))
+    : [];
 
   const byWorkout = new Map<number, WorkoutSet[]>();
   for (const set of allSets) {
@@ -66,8 +86,12 @@ function loadWorkoutsWithSets(limit?: number): WorkoutWithSets[] {
   return limit ? result.slice(0, limit) : result;
 }
 
-function scheduleViewsForDate(date: string): ScheduleEntryView[] {
-  const rows = db
+async function scheduleViewsForDate(
+  userId: string,
+  date: string,
+): Promise<ScheduleEntryView[]> {
+  const db = getDb();
+  const rows = await db
     .select({
       entry: scheduleEntries,
       dayName: planDays.name,
@@ -76,8 +100,7 @@ function scheduleViewsForDate(date: string): ScheduleEntryView[] {
     .from(scheduleEntries)
     .leftJoin(planDays, eq(scheduleEntries.planDayId, planDays.id))
     .leftJoin(plans, eq(planDays.planId, plans.id))
-    .where(eq(scheduleEntries.date, date))
-    .all();
+    .where(and(eq(scheduleEntries.date, date), eq(scheduleEntries.userId, userId)));
 
   return rows.map((r) => ({
     ...r.entry,
@@ -85,8 +108,8 @@ function scheduleViewsForDate(date: string): ScheduleEntryView[] {
   }));
 }
 
-export function getDashboardData(): DashboardData {
-  const all = loadWorkoutsWithSets();
+export async function getDashboardData(userId: string): Promise<DashboardData> {
+  const all = await loadWorkoutsWithSets(userId);
   const today = new Date();
   const thisWeekStart = weekStart(today);
   const lastWeekStart = addDays(thisWeekStart, -7);
@@ -169,37 +192,44 @@ export function getDashboardData(): DashboardData {
     prsLast30Days,
     weeklyVolume,
     recentWorkouts: all.slice(0, 5),
-    todaysEntries: scheduleViewsForDate(todayIso()),
+    todaysEntries: await scheduleViewsForDate(userId, todayIso()),
     trackedExercises,
     progressByExercise,
   };
 }
 
-export function getLibraryExercises(): LibraryExercise[] {
-  return db
+/** Shared built-in catalog (`user_id IS NULL`) plus this user's own custom/imported rows. */
+export async function getLibraryExercises(
+  userId: string,
+): Promise<LibraryExercise[]> {
+  const db = getDb();
+  const rows = await db
     .select()
     .from(exercises)
-    .orderBy(asc(exercises.name))
-    .all()
-    .map((e) => ({
-      id: e.id,
-      name: e.name,
-      bodyPart: e.bodyPart,
-      equipment: e.equipment,
-      target: e.target,
-      instructions: e.instructions ?? undefined,
-      source: e.source as LibraryExercise["source"],
-    }));
+    .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
+    .orderBy(asc(exercises.name));
+  return rows.map((e) => ({
+    id: e.id,
+    name: e.name,
+    bodyPart: e.bodyPart,
+    equipment: e.equipment,
+    target: e.target,
+    instructions: e.instructions ?? undefined,
+    source: e.source as LibraryExercise["source"],
+  }));
 }
 
 /** Latest logged session per exercise — powers "last time" hints in the logger. */
-export function getLastSessionHints(): LastSessionHints {
-  const rows = db
+export async function getLastSessionHints(
+  userId: string,
+): Promise<LastSessionHints> {
+  const db = getDb();
+  const rows = await db
     .select({ set: workoutSets, date: workouts.date, workoutId: workouts.id })
     .from(workoutSets)
     .innerJoin(workouts, eq(workoutSets.workoutId, workouts.id))
-    .orderBy(desc(workouts.date), desc(workouts.id), asc(workoutSets.setNumber))
-    .all();
+    .where(eq(workouts.userId, userId))
+    .orderBy(desc(workouts.date), desc(workouts.id), asc(workoutSets.setNumber));
 
   const hints: LastSessionHints = {};
   // Rows arrive newest-first, so the first one seen for an exercise belongs to
@@ -223,63 +253,94 @@ export function getLastSessionHints(): LastSessionHints {
 }
 
 /** Today's planned (not yet completed) schedule entries, with exercises for prefill. */
-export function getTodaysPrefills(): ScheduledDayPrefill[] {
-  const entries = db
-    .select()
-    .from(scheduleEntries)
-    .where(eq(scheduleEntries.date, todayIso()))
-    .all()
-    .filter((e) => e.status === "planned");
+export async function getTodaysPrefills(
+  userId: string,
+): Promise<ScheduledDayPrefill[]> {
+  const db = getDb();
+  const entries = (
+    await db
+      .select()
+      .from(scheduleEntries)
+      .where(
+        and(eq(scheduleEntries.date, todayIso()), eq(scheduleEntries.userId, userId)),
+      )
+  ).filter((e) => e.status === "planned");
 
-  return entries.map((entry) => {
-    let exercisesForDay: ScheduledDayPrefill["exercises"] = [];
-    if (entry.planDayId != null) {
-      exercisesForDay = db
-        .select()
-        .from(planExercises)
-        .where(eq(planExercises.planDayId, entry.planDayId))
-        .orderBy(asc(planExercises.position))
-        .all()
-        .map((pe) => ({
+  return Promise.all(
+    entries.map(async (entry) => {
+      let exercisesForDay: ScheduledDayPrefill["exercises"] = [];
+      // Safe without a further ownership check: scheduleWorkout() only ever
+      // sets planDayId to a day from one of this user's own plans.
+      if (entry.planDayId != null) {
+        exercisesForDay = (
+          await db
+            .select()
+            .from(planExercises)
+            .where(eq(planExercises.planDayId, entry.planDayId))
+            .orderBy(asc(planExercises.position))
+        ).map((pe) => ({
           name: pe.exerciseName,
           sets: pe.sets,
           reps: pe.reps,
           restSec: pe.restSec ?? undefined,
           notes: pe.notes ?? undefined,
         }));
-    }
-    return { entryId: entry.id, label: entry.label, exercises: exercisesForDay };
-  });
+      }
+      return { entryId: entry.id, label: entry.label, exercises: exercisesForDay };
+    }),
+  );
 }
 
-export function getWorkoutHistory(limit = 30): WorkoutWithSets[] {
-  return loadWorkoutsWithSets(limit);
+export async function getWorkoutHistory(
+  userId: string,
+  limit = 30,
+): Promise<WorkoutWithSets[]> {
+  return loadWorkoutsWithSets(userId, limit);
 }
 
 /** How much logged data a history reset would remove. */
-export function getHistorySize(): { workouts: number; sets: number } {
-  return {
-    workouts: db.select({ id: workouts.id }).from(workouts).all().length,
-    sets: db.select({ id: workoutSets.id }).from(workoutSets).all().length,
-  };
+export async function getHistorySize(
+  userId: string,
+): Promise<{ workouts: number; sets: number }> {
+  const db = getDb();
+  const ownedWorkouts = await db
+    .select({ id: workouts.id })
+    .from(workouts)
+    .where(eq(workouts.userId, userId));
+  const workoutIds = ownedWorkouts.map((w) => w.id);
+  const sets = workoutIds.length
+    ? await db
+        .select({ id: workoutSets.id })
+        .from(workoutSets)
+        .where(inArray(workoutSets.workoutId, workoutIds))
+    : [];
+  return { workouts: ownedWorkouts.length, sets: sets.length };
 }
 
-export function getPlansWithDays(): PlanWithDays[] {
-  const allPlans = db
+export async function getPlansWithDays(userId: string): Promise<PlanWithDays[]> {
+  const db = getDb();
+  const allPlans = await db
     .select()
     .from(plans)
-    .orderBy(desc(plans.createdAt), desc(plans.id))
-    .all();
-  const allDays = db
-    .select()
-    .from(planDays)
-    .orderBy(asc(planDays.position))
-    .all();
-  const allExercises = db
-    .select()
-    .from(planExercises)
-    .orderBy(asc(planExercises.position))
-    .all();
+    .where(eq(plans.userId, userId))
+    .orderBy(desc(plans.createdAt), desc(plans.id));
+
+  const planIds = allPlans.map((p) => p.id);
+  const allDays = planIds.length
+    ? await db
+        .select()
+        .from(planDays)
+        .where(inArray(planDays.planId, planIds))
+        .orderBy(asc(planDays.position))
+    : [];
+  const dayIds = allDays.map((d) => d.id);
+  const allExercises = dayIds.length
+    ? await db
+        .select()
+        .from(planExercises)
+        .where(inArray(planExercises.planDayId, dayIds))
+        .orderBy(asc(planExercises.position))
+    : [];
 
   return allPlans.map((plan) => ({
     ...plan,
@@ -293,25 +354,26 @@ export function getPlansWithDays(): PlanWithDays[] {
 }
 
 /** Schedule for the current week and the next one. */
-export function getUpcomingSchedule(): {
-  date: string;
-  entries: ScheduleEntryView[];
-}[] {
+export async function getUpcomingSchedule(
+  userId: string,
+): Promise<{ date: string; entries: ScheduleEntryView[] }[]> {
+  const db = getDb();
   const start = weekStart(new Date());
   const days: { date: string; entries: ScheduleEntryView[] }[] = [];
 
   const startIso = toIsoDate(start);
   const endIso = toIsoDate(addDays(start, 14));
-  const rows = db
-    .select({
-      entry: scheduleEntries,
-      planName: plans.name,
-    })
-    .from(scheduleEntries)
-    .leftJoin(planDays, eq(scheduleEntries.planDayId, planDays.id))
-    .leftJoin(plans, eq(planDays.planId, plans.id))
-    .all()
-    .filter((r) => r.entry.date >= startIso && r.entry.date < endIso);
+  const rows = (
+    await db
+      .select({
+        entry: scheduleEntries,
+        planName: plans.name,
+      })
+      .from(scheduleEntries)
+      .leftJoin(planDays, eq(scheduleEntries.planDayId, planDays.id))
+      .leftJoin(plans, eq(planDays.planId, plans.id))
+      .where(eq(scheduleEntries.userId, userId))
+  ).filter((r) => r.entry.date >= startIso && r.entry.date < endIso);
 
   for (let i = 0; i < 14; i++) {
     const date = toIsoDate(addDays(start, i));
@@ -325,11 +387,11 @@ export function getUpcomingSchedule(): {
   return days;
 }
 
-export async function getExerciseCatalogMerged(): Promise<{
-  exercises: LibraryExercise[];
-}> {
+export async function getExerciseCatalogMerged(
+  userId: string,
+): Promise<{ exercises: LibraryExercise[] }> {
   const catalog = getVendoredCatalog(await getLocale());
-  const local = getLibraryExercises();
+  const local = await getLibraryExercises(userId);
 
   const merged = new Map<string, LibraryExercise>();
   for (const e of catalog) {

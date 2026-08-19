@@ -9,6 +9,7 @@ import {
 import { FadeIn } from "@/components/motion";
 import { WorkoutLogger } from "@/components/logger/workout-logger";
 import { HistoryList } from "@/components/logger/history-list";
+import { requireUserId } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n/server";
 import {
   getLastSessionHints,
@@ -25,11 +26,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function LogPage() {
+  const userId = await requireUserId();
   const t = await getDictionary();
-  const library = getLibraryExercises();
-  const hints = getLastSessionHints();
-  const prefills = getTodaysPrefills();
-  const history = getWorkoutHistory(20);
+  const [library, hints, prefills, history] = await Promise.all([
+    getLibraryExercises(userId),
+    getLastSessionHints(userId),
+    getTodaysPrefills(userId),
+    getWorkoutHistory(userId, 20),
+  ]);
 
   return (
     <div className="space-y-6">

@@ -1,35 +1,35 @@
 import type { Metadata } from "next";
 import { FadeIn } from "@/components/motion";
-import { ResetHistoryCard } from "@/components/settings/reset-history-card";
+import { ExerciseBrowser } from "@/components/exercises/exercise-browser";
+import { requireUserId } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n/server";
-import { getHistorySize } from "@/lib/queries";
+import { getExerciseCatalogMerged } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getDictionary();
-  return { title: t.metadata.settingsTitle };
+  return { title: t.metadata.exercisesTitle };
 }
 
-export default async function SettingsPage() {
+export default async function ExercisesPage() {
+  const userId = await requireUserId();
   const t = await getDictionary();
-  const history = getHistorySize();
+  const catalog = await getExerciseCatalogMerged(userId);
 
   return (
     <div className="space-y-6">
       <FadeIn>
         <h1 className="text-2xl font-semibold tracking-tight">
-          {t.settingsPage.title}
+          {t.exercisesPage.title}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {t.settingsPage.subtitle}
+          {t.exercisesPage.subtitle}
         </p>
       </FadeIn>
 
       <FadeIn delay={0.05}>
-        <div className="max-w-xl">
-          <ResetHistoryCard history={history} />
-        </div>
+        <ExerciseBrowser exercises={catalog.exercises} />
       </FadeIn>
     </div>
   );

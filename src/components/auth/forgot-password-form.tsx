@@ -1,0 +1,67 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useI18n } from "@/components/i18n-provider";
+import { requestPasswordReset } from "@/lib/auth-actions";
+
+export function ForgotPasswordForm() {
+  const { t } = useI18n();
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    startTransition(async () => {
+      const result = await requestPasswordReset(email);
+      if (result.ok) {
+        setSubmitted(true);
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  if (submitted) {
+    return (
+      <div className="space-y-3 text-center">
+        <p className="text-sm">{t.auth.checkEmailForReset}</p>
+        <Link
+          href="/sign-in"
+          className="text-sm font-medium underline-offset-4 hover:underline"
+        >
+          {t.auth.backToSignIn}
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="email">{t.auth.emailLabel}</Label>
+        <Input
+          id="email"
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </div>
+      <Button type="submit" className="w-full" disabled={pending}>
+        {pending ? t.auth.sending : t.auth.sendResetLink}
+      </Button>
+      <p className="text-center text-sm text-muted-foreground">
+        <Link href="/sign-in" className="font-medium text-foreground underline-offset-4 hover:underline">
+          {t.auth.backToSignIn}
+        </Link>
+      </p>
+    </form>
+  );
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { FadeIn } from "@/components/motion";
 import { PlanGenerator } from "@/components/generate/plan-generator";
+import { requireUserId } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function GeneratePage() {
+  await requireUserId();
   const t = await getDictionary();
   const aiEnabled = Boolean(process.env.ANTHROPIC_API_KEY);
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
+import { getUser } from "@/lib/auth";
 import { buildDemoPlan } from "@/lib/demo-plan";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,11 @@ Rules:
 - If the user writes in another language, answer exercise names in English but the plan name, description, day names and notes in their language.`;
 
 export async function POST(req: Request) {
+  const user = await getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in to do that." }, { status: 401 });
+  }
+
   let prompt: unknown;
   try {
     ({ prompt } = await req.json());

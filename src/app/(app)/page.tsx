@@ -13,6 +13,7 @@ import { FadeIn } from "@/components/motion";
 import { StatCards, PrBadge } from "@/components/dashboard/stat-cards";
 import { VolumeChart } from "@/components/dashboard/volume-chart";
 import { ProgressChart } from "@/components/dashboard/progress-chart";
+import { requireUserId } from "@/lib/auth";
 import { getDashboardData } from "@/lib/queries";
 import { fmt } from "@/lib/i18n/config";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
@@ -21,8 +22,9 @@ import { formatShortDate, formatVolume } from "@/lib/overload";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  const userId = await requireUserId();
   const [t, locale] = await Promise.all([getDictionary(), getLocale()]);
-  const data = getDashboardData();
+  const data = await getDashboardData(userId);
   const plannedToday = data.todaysEntries.filter((e) => e.status === "planned");
 
   return (

@@ -2,17 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
-import { AppSidebar } from "@/components/app-sidebar";
-import { AppBreadcrumb } from "@/components/app-breadcrumb";
 import { I18nProvider } from "@/components/i18n-provider";
-import { LanguageToggle } from "@/components/language-toggle";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
@@ -61,23 +51,7 @@ export default async function RootLayout({
       <body className="antialiased">
         <I18nProvider locale={locale}>
           <Providers>
-            <TooltipProvider>
-              <SidebarProvider>
-                <AppSidebar />
-                <SidebarInset>
-                  <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-                    <SidebarTrigger className="-ml-1" />
-                    <Separator orientation="vertical" className="mr-2 h-4" />
-                    <AppBreadcrumb />
-                    <div className="ml-auto flex items-center gap-1">
-                      <LanguageToggle />
-                      <ThemeToggle />
-                    </div>
-                  </header>
-                  <main className="flex-1 p-4 md:p-6">{children}</main>
-                </SidebarInset>
-              </SidebarProvider>
-            </TooltipProvider>
+            <TooltipProvider>{children}</TooltipProvider>
             <Toaster richColors position="top-center" />
           </Providers>
         </I18nProvider>
