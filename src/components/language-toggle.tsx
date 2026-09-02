@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Languages } from "lucide-react";
+import { Check, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,8 +35,14 @@ export function LanguageToggle() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={t.header.changeLanguage}>
-          <Languages className="size-4" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 px-2"
+          aria-label={t.header.changeLanguage}
+        >
+          <Globe className="size-4" />
+          <span className="text-xs font-medium uppercase">{locale}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
