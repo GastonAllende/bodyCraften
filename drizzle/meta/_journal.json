@@ -15,6 +15,13 @@
       "when": 1788349519841,
       "tag": "0001_grey_solo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788378710980,
+      "tag": "0002_wise_stephen_strange",
+      "breakpoints": true
     }
   ]
 }

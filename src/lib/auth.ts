@@ -4,16 +4,18 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * `getUser()` (not `getSession()`) revalidates the JWT against Supabase's
- * auth server rather than trusting a possibly-stale cookie — the
- * documented-safe pattern for server-side checks with `@supabase/ssr`.
+ * `getClaims()` (not `getSession()`) cryptographically verifies the JWT —
+ * locally via cached JWKS for projects on asymmetric signing keys (the
+ * default), so unlike `getUser()` this doesn't cost a network round-trip to
+ * the Auth server on every call. It won't catch a server-side logout/revoke
+ * mid-session the way `getUser()` would — an accepted trade for this app's
+ * threat model. Don't swap in `getSession()`, which skips verification
+ * entirely and trusts a possibly-stale cookie.
  */
 export async function getUser() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data } = await supabase.auth.getClaims();
+  return data?.claims ? { id: data.claims.sub } : null;
 }
 
 /** For pages that require a session. Redirects rather than erroring. */

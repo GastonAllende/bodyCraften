@@ -400,16 +400,19 @@ export async function getBodyHistory(userId: string): Promise<BodyEntryWithPhoto
     .where(eq(bodyMeasurements.userId, userId))
     .orderBy(desc(bodyMeasurements.date), desc(bodyMeasurements.id));
 
+  const paths = rows
+    .map((row) => row.photoPath)
+    .filter((path): path is string => path !== null);
   const supabase = await createClient();
-  return Promise.all(
-    rows.map(async (row) => {
-      if (!row.photoPath) return { ...row, photoUrl: null };
-      const { data } = await supabase.storage
-        .from(BODY_PHOTOS_BUCKET)
-        .createSignedUrl(row.photoPath, 3600);
-      return { ...row, photoUrl: data?.signedUrl ?? null };
-    }),
-  );
+  const { data } = paths.length
+    ? await supabase.storage.from(BODY_PHOTOS_BUCKET).createSignedUrls(paths, 3600)
+    : { data: null };
+  const urlByPath = new Map(data?.map((d) => [d.path, d.signedUrl]));
+
+  return rows.map((row) => ({
+    ...row,
+    photoUrl: (row.photoPath && urlByPath.get(row.photoPath)) || null,
+  }));
 }
 
 export async function getExerciseCatalogMerged(
