@@ -22,12 +22,17 @@ export async function signUp(input: {
     return { ok: false, error: t.auth.passwordTooShort };
   }
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password: input.password,
     options: { emailRedirectTo: `${await getSiteUrl()}/auth/callback` },
   });
   if (error) return { ok: false, error: error.message };
+  // Supabase returns no error for an already-registered email (anti-enumeration);
+  // an existing account is signaled by an empty `identities` array instead.
+  if (data.user && data.user.identities?.length === 0) {
+    return { ok: false, error: t.auth.emailAlreadyRegistered };
+  }
   return { ok: true };
 }
 
