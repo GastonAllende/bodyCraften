@@ -160,15 +160,10 @@ export function BodyEntryForm({
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 pb-3">
+      <CardHeader className="pb-3">
         <CardTitle className="text-base">
           {editingEntry ? t.bodyPage.editEntry : t.bodyPage.logEntry}
         </CardTitle>
-        {editingEntry && (
-          <Button variant="ghost" size="sm" onClick={onCancelEdit}>
-            {t.common.cancel}
-          </Button>
-        )}
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-1.5">
@@ -260,13 +255,20 @@ export function BodyEntryForm({
           <p className="text-xs text-muted-foreground">{t.bodyPage.photoHint}</p>
         </div>
 
-        <Button onClick={handleSubmit} disabled={!canSave || saving}>
-          {saving
-            ? t.bodyPage.saving
-            : editingEntry
-              ? t.bodyPage.saveChanges
-              : t.bodyPage.save}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleSubmit} disabled={!canSave || saving}>
+            {saving
+              ? t.bodyPage.saving
+              : editingEntry
+                ? t.bodyPage.saveChanges
+                : t.bodyPage.save}
+          </Button>
+          {editingEntry && (
+            <Button variant="outline" onClick={onCancelEdit} disabled={saving}>
+              {t.common.cancel}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
