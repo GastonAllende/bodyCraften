@@ -3,6 +3,7 @@ import {
   Dumbbell,
   LayoutDashboard,
   NotebookPen,
+  Ruler,
   Settings,
   Sparkles,
   type LucideIcon,
@@ -18,6 +19,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/log", labelKey: "log", icon: NotebookPen },
+  { href: "/body", labelKey: "body", icon: Ruler },
   { href: "/plans", labelKey: "plans", icon: CalendarRange },
   { href: "/exercises", labelKey: "exercises", icon: Dumbbell },
   { href: "/generate", labelKey: "generate", icon: Sparkles },

@@ -118,6 +118,24 @@ export const scheduleEntries = pgTable("schedule_entries", {
   }),
 });
 
+/** A body-composition check-in: measurements + optional progress photo. */
+export const bodyMeasurements = pgTable("body_measurements", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => authUsers.id, { onDelete: "cascade" }),
+  date: text("date").notNull(), // yyyy-MM-dd
+  heightCm: real("height_cm"),
+  weightKg: real("weight_kg"),
+  waistCm: real("waist_cm"),
+  chestCm: real("chest_cm"),
+  thighCm: real("thigh_cm"),
+  hipCm: real("hip_cm"),
+  photoPath: text("photo_path"), // Supabase Storage object path, not a public URL
+  notes: text("notes"),
+  createdAt: text("created_at").notNull(),
+});
+
 export type Exercise = typeof exercises.$inferSelect;
 export type Workout = typeof workouts.$inferSelect;
 export type WorkoutSet = typeof workoutSets.$inferSelect;
@@ -125,3 +143,4 @@ export type Plan = typeof plans.$inferSelect;
 export type PlanDay = typeof planDays.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;
 export type ScheduleEntry = typeof scheduleEntries.$inferSelect;
+export type BodyMeasurement = typeof bodyMeasurements.$inferSelect;

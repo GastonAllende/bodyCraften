@@ -24,6 +24,7 @@ alter table plan_days enable row level security;
 alter table plan_exercises enable row level security;
 alter table schedule_entries enable row level security;
 alter table exercises enable row level security;
+alter table body_measurements enable row level security;
 
 create policy "workouts_owner" on workouts
   for all to authenticated
@@ -34,6 +35,10 @@ create policy "plans_owner" on plans
   using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 create policy "schedule_entries_owner" on schedule_entries
+  for all to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+create policy "body_measurements_owner" on body_measurements
   for all to authenticated
   using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 

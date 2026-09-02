@@ -1,4 +1,5 @@
 import type {
+  BodyMeasurement,
   Plan,
   PlanDay,
   PlanExercise,
@@ -123,6 +124,29 @@ export type ExerciseProgressPoint = {
   bestE1rm: number;
   topWeight: number;
   volume: number;
+};
+
+export type BodyEntryInput = {
+  date: string;
+  heightCm?: number;
+  weightKg?: number;
+  waistCm?: number;
+  chestCm?: number;
+  thighCm?: number;
+  hipCm?: number;
+  notes?: string;
+  /** Storage object path, already uploaded client-side before the action runs. */
+  photoPath?: string;
+};
+
+export type BodyEntryWithPhoto = BodyMeasurement & { photoUrl: string | null };
+
+/**
+ * Edit payload for an existing entry. `photoPath` is tri-state:
+ * `undefined` keeps the current photo, `null` removes it, a string replaces it.
+ */
+export type BodyEntryUpdateInput = Omit<BodyEntryInput, "photoPath"> & {
+  photoPath?: string | null;
 };
 
 export type DashboardData = {

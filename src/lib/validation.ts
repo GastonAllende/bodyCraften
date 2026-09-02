@@ -42,3 +42,8 @@ export function isValidRepRange(value: string): boolean {
   const high = Number(match[2]);
   return high >= low;
 }
+
+/** A decimal value greater than 0 — used for height/weight/circumference inputs. */
+export function isPositiveDecimal(value: string): boolean {
+  return /^\d+(\.\d+)?$/.test(value.trim()) && Number(value.trim()) > 0;
+}

@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { getDb } from "@/db";
 import {
+  bodyMeasurements,
   exercises,
   planDays,
   planExercises,
@@ -25,7 +26,10 @@ import {
   todayIso,
   weekStart,
 } from "@/lib/overload";
+import { createClient } from "@/lib/supabase/server";
+import { BODY_PHOTOS_BUCKET } from "@/lib/body-photos";
 import type {
+  BodyEntryWithPhoto,
   DashboardData,
   ExerciseProgressPoint,
   LastSessionHints,
@@ -385,6 +389,27 @@ export async function getUpcomingSchedule(
     });
   }
   return days;
+}
+
+/** Body-composition history, newest first, with signed URLs for any photos. */
+export async function getBodyHistory(userId: string): Promise<BodyEntryWithPhoto[]> {
+  const db = getDb();
+  const rows = await db
+    .select()
+    .from(bodyMeasurements)
+    .where(eq(bodyMeasurements.userId, userId))
+    .orderBy(desc(bodyMeasurements.date), desc(bodyMeasurements.id));
+
+  const supabase = await createClient();
+  return Promise.all(
+    rows.map(async (row) => {
+      if (!row.photoPath) return { ...row, photoUrl: null };
+      const { data } = await supabase.storage
+        .from(BODY_PHOTOS_BUCKET)
+        .createSignedUrl(row.photoPath, 3600);
+      return { ...row, photoUrl: data?.signedUrl ?? null };
+    }),
+  );
 }
 
 export async function getExerciseCatalogMerged(
