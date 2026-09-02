@@ -45,9 +45,15 @@ function label(exercise: LibraryExercise): string {
   return exercise.displayName ?? exercise.name;
 }
 
-/** A saved row carries a DB id; catalog-only rows are flagged `remote`. */
-function isSaved(exercise: LibraryExercise): boolean {
-  return !exercise.remote;
+/**
+ * Only rows the user actually owns (`custom`/`api` source) can be removed —
+ * `built-in` rows are the shared catalog (`user_id IS NULL`) and
+ * `removeExercise` scopes its DELETE to `user_id = userId`, so it can never
+ * match one. Same rows define "Saved": the shared catalog is always usable
+ * for logging, but "Saved" means "I added this," not "this exists."
+ */
+function isOwned(exercise: LibraryExercise): boolean {
+  return !exercise.remote && exercise.source !== "built-in";
 }
 
 export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] }) {
@@ -62,7 +68,7 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
   const [removing, setRemoving] = useState<LibraryExercise | null>(null);
   const [, startSaving] = useTransition();
 
-  const saved = useMemo(() => exercises.filter(isSaved), [exercises]);
+  const saved = useMemo(() => exercises.filter(isOwned), [exercises]);
   const scoped = scope === "saved" ? saved : exercises;
 
   const bodyParts = useMemo(
@@ -236,7 +242,7 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
                       >
                         <BookmarkPlus className="size-4" />
                       </Button>
-                    ) : (
+                    ) : isOwned(exercise) ? (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -255,6 +261,13 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
                         <BookmarkCheck className="size-4 group-hover/bookmark:hidden" />
                         <BookmarkX className="hidden size-4 group-hover/bookmark:block" />
                       </Button>
+                    ) : (
+                      <span
+                        className="flex size-7 shrink-0 items-center justify-center text-muted-foreground"
+                        title={t.exercisesPage.inLibrary}
+                      >
+                        <BookmarkCheck className="size-4" />
+                      </span>
                     )}
                   </div>
                   <div className="mt-auto flex flex-wrap gap-1.5">
@@ -321,7 +334,7 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
               <p>{selected?.instructions || t.exercisesPage.noInstructions}</p>
             )}
           </div>
-          {selected && (
+          {selected && (selected.remote || isOwned(selected)) && (
             <DialogFooter>
               {selected.remote ? (
                 <Button
