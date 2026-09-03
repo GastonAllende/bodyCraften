@@ -1,6 +1,6 @@
 {
   "enabledPlugins": {
-    "supabase@claude-plugins-official": true,
+    "supabase@claude-plugins-official": false,
     "andrej-karpathy-skills@karpathy-skills": true
   }
 }
