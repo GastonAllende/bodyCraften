@@ -30,6 +30,7 @@ export const exercises = pgTable(
     equipment: text("equipment").notNull(),
     target: text("target").notNull(),
     instructions: text("instructions"),
+    imagePath: text("image_path"), // Supabase Storage object path, not a public URL
     source: text("source").notNull().default("built-in"), // built-in | api | custom
   },
   (table) => [

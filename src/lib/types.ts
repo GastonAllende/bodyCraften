@@ -29,6 +29,29 @@ export type LibraryExercise = {
   id?: number;
   /** True when it comes from the catalog and is not saved locally yet. */
   remote?: boolean;
+  /** Signed Storage URL for an owned row's photo/diagram; catalog rows never have one. */
+  imageUrl?: string;
+};
+
+export type ExerciseInput = {
+  name: string;
+  bodyPart: string;
+  equipment: string;
+  target: string;
+  instructions?: string;
+  /** Storage object path, already uploaded client-side before the action runs. */
+  imagePath?: string;
+};
+
+/**
+ * Edit payload for an existing owned exercise. `name` is immutable — it is the
+ * join key for `workout_sets`/`plan_exercises`, so renaming here would split
+ * or orphan history. `imagePath` is tri-state, same convention as
+ * `BodyEntryUpdateInput.photoPath`: `undefined` keeps it, `null` removes it, a
+ * string replaces it.
+ */
+export type ExerciseUpdateInput = Omit<ExerciseInput, "name" | "imagePath"> & {
+  imagePath?: string | null;
 };
 
 export type WorkoutPayload = {

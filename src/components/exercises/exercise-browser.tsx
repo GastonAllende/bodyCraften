@@ -1,14 +1,17 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useRef, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
   BookmarkCheck,
   BookmarkPlus,
   BookmarkX,
+  ImagePlus,
+  Pencil,
   Plus,
   Search,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -21,21 +24,31 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/components/i18n-provider";
 import {
   addCustomExercise,
   importExercise,
   removeExercise,
+  updateExercise,
 } from "@/lib/actions";
+import { EXERCISE_IMAGES_BUCKET } from "@/lib/exercise-images";
 import { fmt } from "@/lib/i18n/config";
+import { createClient } from "@/lib/supabase/client";
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
 import type { LibraryExercise } from "@/lib/types";
 
 const PAGE_SIZE = 48;
+
+/** `keep` and `remove` only apply when editing — a new exercise has no existing image. */
+type ExerciseImageAction =
+  | { type: "keep" }
+  | { type: "remove" }
+  | { type: "replace"; file: File };
 
 /**
  * What the user reads. `name` stays canonical English because it is the key the
@@ -56,7 +69,13 @@ function isOwned(exercise: LibraryExercise): boolean {
   return !exercise.remote && exercise.source !== "built-in";
 }
 
-export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] }) {
+export function ExerciseBrowser({
+  exercises,
+  userId,
+}: {
+  exercises: LibraryExercise[];
+  userId: string;
+}) {
   const router = useRouter();
   const { t } = useI18n();
   const [query, setQuery] = useState("");
@@ -66,6 +85,9 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
   const [selected, setSelected] = useState<LibraryExercise | null>(null);
   const [savingName, setSavingName] = useState<string | null>(null);
   const [removing, setRemoving] = useState<LibraryExercise | null>(null);
+  const [formTarget, setFormTarget] = useState<LibraryExercise | "new" | null>(
+    null,
+  );
   const [, startSaving] = useTransition();
 
   const saved = useMemo(() => exercises.filter(isOwned), [exercises]);
@@ -157,7 +179,9 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
             className="pl-8"
           />
         </div>
-        <AddCustomExerciseDialog onAdded={() => router.refresh()} />
+        <Button variant="secondary" onClick={() => setFormTarget("new")}>
+          <Plus className="size-4" /> {t.exercisesPage.newExercise}
+        </Button>
       </div>
 
       <div className="flex w-full max-w-sm rounded-lg border p-1">
@@ -319,6 +343,15 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1 text-sm leading-relaxed text-muted-foreground">
+            {selected?.imageUrl && (
+              // Signed Storage URLs skip next/image here, same as body photos.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={selected.imageUrl}
+                alt=""
+                className="w-full rounded-md border object-cover"
+              />
+            )}
             {selected?.instructionSteps?.length ? (
               <div className="space-y-1.5">
                 <h3 className="font-medium text-foreground">
@@ -347,18 +380,30 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
                   {t.exercisesPage.saveToMyLibrary}
                 </Button>
               ) : (
-                <Button
-                  variant="outline"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => {
-                    // Hand over to the confirm dialog rather than stacking two.
-                    setSelected(null);
-                    setRemoving(selected);
-                  }}
-                >
-                  <BookmarkX className="size-4" />{" "}
-                  {t.exercisesPage.removeFromLibrary}
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      // Hand over to the edit dialog rather than stacking two.
+                      setSelected(null);
+                      setFormTarget(selected);
+                    }}
+                  >
+                    <Pencil className="size-4" /> {t.exercisesPage.edit}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => {
+                      // Hand over to the confirm dialog rather than stacking two.
+                      setSelected(null);
+                      setRemoving(selected);
+                    }}
+                  >
+                    <BookmarkX className="size-4" />{" "}
+                    {t.exercisesPage.removeFromLibrary}
+                  </Button>
+                </>
               )}
             </DialogFooter>
           )}
@@ -395,6 +440,18 @@ export function ExerciseBrowser({ exercises }: { exercises: LibraryExercise[] })
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ExerciseFormDialog
+        key={formTarget === "new" || formTarget === null ? "new" : formTarget.id}
+        userId={userId}
+        exercise={formTarget === "new" ? null : formTarget}
+        open={formTarget !== null}
+        onOpenChange={(open) => !open && setFormTarget(null)}
+        onSaved={() => {
+          setFormTarget(null);
+          router.refresh();
+        }}
+      />
     </div>
   );
 }
@@ -450,31 +507,117 @@ function FilterChip({
   );
 }
 
-function AddCustomExerciseDialog({ onAdded }: { onAdded: () => void }) {
+/**
+ * Add/edit dialog for an owned exercise. `exercise` present means edit mode:
+ * name renders as static text (it's the join key for logged sets and plan
+ * entries — see `ExerciseUpdateInput` — so it can't be changed here) and
+ * submit calls `updateExercise` instead of `addCustomExercise`.
+ */
+function ExerciseFormDialog({
+  userId,
+  exercise,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  userId: string;
+  exercise: LibraryExercise | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [bodyPart, setBodyPart] = useState("");
-  const [equipment, setEquipment] = useState("");
-  const [target, setTarget] = useState("");
+  const [name, setName] = useState(exercise?.name ?? "");
+  const [bodyPart, setBodyPart] = useState(exercise?.bodyPart ?? "");
+  const [equipment, setEquipment] = useState(exercise?.equipment ?? "");
+  const [target, setTarget] = useState(exercise?.target ?? "");
+  const [instructions, setInstructions] = useState(exercise?.instructions ?? "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageCleared, setImageCleared] = useState(false);
   const [saving, startSaving] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    e.target.value = "";
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      toast.error(t.exercisesPage.imageInvalidType);
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast.error(t.exercisesPage.imageTooLarge);
+      return;
+    }
+    setImageFile(file);
+    setImageCleared(false);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
+
+  function removeImage() {
+    setImageFile(null);
+    setImageCleared(true);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }
+
+  const existingImageUrl =
+    !imageFile && !imageCleared ? (exercise?.imageUrl ?? null) : null;
+  const displayedImage = imagePreview ?? existingImageUrl;
 
   function submit() {
     startSaving(async () => {
-      const result = await addCustomExercise({
-        name,
+      const imageAction: ExerciseImageAction = imageFile
+        ? { type: "replace", file: imageFile }
+        : exercise && imageCleared
+          ? { type: "remove" }
+          : { type: "keep" };
+
+      let imagePath: string | null | undefined;
+      if (imageAction.type === "remove") {
+        imagePath = null;
+      } else if (imageAction.type === "replace") {
+        const supabase = createClient();
+        const ext = imageAction.file.name.split(".").pop() || "jpg";
+        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage
+          .from(EXERCISE_IMAGES_BUCKET)
+          .upload(path, imageAction.file, { contentType: imageAction.file.type });
+        if (error) {
+          toast.error(t.exercisesPage.imageUploadFailed);
+          return;
+        }
+        imagePath = path;
+      }
+
+      const fields = {
         bodyPart,
         equipment,
         target,
-      });
+        instructions: instructions.trim() || undefined,
+      };
+
+      const result = exercise
+        ? await updateExercise(exercise.id!, { ...fields, imagePath })
+        : await addCustomExercise({
+            name,
+            ...fields,
+            imagePath: imagePath ?? undefined,
+          });
+
       if (result.ok) {
-        toast.success(fmt(t.exercisesPage.added, { name: name.trim() }));
-        setOpen(false);
-        setName("");
-        setBodyPart("");
-        setEquipment("");
-        setTarget("");
-        onAdded();
+        toast.success(
+          exercise
+            ? fmt(t.exercisesPage.updated, { name: label(exercise) })
+            : fmt(t.exercisesPage.added, { name: name.trim() }),
+        );
+        onSaved();
       } else {
         toast.error(result.error);
       }
@@ -482,26 +625,29 @@ function AddCustomExerciseDialog({ onAdded }: { onAdded: () => void }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="secondary">
-          <Plus className="size-4" /> {t.exercisesPage.newExercise}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t.exercisesPage.addCustomTitle}</DialogTitle>
-          <DialogDescription>{t.exercisesPage.addCustomDesc}</DialogDescription>
+          <DialogTitle>
+            {exercise ? t.exercisesPage.editCustomTitle : t.exercisesPage.addCustomTitle}
+          </DialogTitle>
+          <DialogDescription>
+            {exercise ? t.exercisesPage.editCustomDesc : t.exercisesPage.addCustomDesc}
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid max-h-[60vh] gap-3 overflow-y-auto pr-1">
           <div className="grid gap-1.5">
             <Label htmlFor="ex-name">{t.exercisesPage.name}</Label>
-            <Input
-              id="ex-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t.exercisesPage.namePlaceholder}
-            />
+            {exercise ? (
+              <p className="text-sm font-medium">{name}</p>
+            ) : (
+              <Input
+                id="ex-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t.exercisesPage.namePlaceholder}
+              />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
@@ -532,10 +678,65 @@ function AddCustomExerciseDialog({ onAdded }: { onAdded: () => void }) {
               placeholder={t.exercisesPage.targetPlaceholder}
             />
           </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="ex-instructions">{t.exercisesPage.instructionsLabel}</Label>
+            <Textarea
+              id="ex-instructions"
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder={t.exercisesPage.instructionsPlaceholder}
+              rows={4}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label>{t.exercisesPage.imageLabel}</Label>
+            {displayedImage ? (
+              <div className="relative w-28">
+                {/* Local blob previews and signed Storage URLs both skip next/image here. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={displayedImage}
+                  alt=""
+                  className="size-28 rounded-md border object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  aria-label={t.exercisesPage.removeImage}
+                  className="absolute -right-2 -top-2 rounded-full border bg-background p-1 shadow-sm"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-fit"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <ImagePlus className="size-4" /> {t.exercisesPage.imageLabel}
+              </Button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ALLOWED_IMAGE_TYPES.join(",")}
+              className="hidden"
+              onChange={handleImageChange}
+            />
+            <p className="text-xs text-muted-foreground">{t.exercisesPage.imageHint}</p>
+          </div>
         </div>
         <DialogFooter>
           <Button onClick={submit} disabled={saving || name.trim().length < 2}>
-            {saving ? t.exercisesPage.adding : t.exercisesPage.add}
+            {saving
+              ? exercise
+                ? t.exercisesPage.saving
+                : t.exercisesPage.adding
+              : exercise
+                ? t.exercisesPage.saveChanges
+                : t.exercisesPage.add}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -29,7 +29,7 @@ export default async function ExercisesPage() {
       </FadeIn>
 
       <FadeIn delay={0.05}>
-        <ExerciseBrowser exercises={catalog.exercises} />
+        <ExerciseBrowser exercises={catalog.exercises} userId={userId} />
       </FadeIn>
     </div>
   );

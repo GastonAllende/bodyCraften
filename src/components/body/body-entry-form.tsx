@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/components/i18n-provider";
 import { todayIso } from "@/lib/overload";
+import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/uploads";
 import { isPositiveDecimal, sanitizeDecimal } from "@/lib/validation";
 import type { BodyEntryWithPhoto } from "@/lib/types";
 
@@ -21,9 +22,6 @@ const MEASUREMENT_KEYS = [
   "thighCm",
   "hipCm",
 ] as const;
-
-const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 export type BodyEntryDraft = {
   date: string;
@@ -104,11 +102,11 @@ export function BodyEntryForm({
     const file = e.target.files?.[0] ?? null;
     e.target.value = "";
     if (!file) return;
-    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       toast.error(t.bodyPage.photoInvalidType);
       return;
     }
-    if (file.size > MAX_PHOTO_BYTES) {
+    if (file.size > MAX_IMAGE_BYTES) {
       toast.error(t.bodyPage.photoTooLarge);
       return;
     }
@@ -248,7 +246,7 @@ export function BodyEntryForm({
           <input
             ref={fileInputRef}
             type="file"
-            accept={ALLOWED_PHOTO_TYPES.join(",")}
+            accept={ALLOWED_IMAGE_TYPES.join(",")}
             className="hidden"
             onChange={handlePhotoChange}
           />

@@ -28,6 +28,7 @@ import {
 } from "@/lib/overload";
 import { createClient } from "@/lib/supabase/server";
 import { BODY_PHOTOS_BUCKET } from "@/lib/body-photos";
+import { EXERCISE_IMAGES_BUCKET } from "@/lib/exercise-images";
 import type {
   BodyEntryWithPhoto,
   DashboardData,
@@ -212,6 +213,16 @@ export async function getLibraryExercises(
     .from(exercises)
     .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
     .orderBy(asc(exercises.name));
+
+  const paths = rows
+    .map((e) => e.imagePath)
+    .filter((path): path is string => path !== null);
+  const supabase = await createClient();
+  const { data } = paths.length
+    ? await supabase.storage.from(EXERCISE_IMAGES_BUCKET).createSignedUrls(paths, 3600)
+    : { data: null };
+  const urlByPath = new Map(data?.map((d) => [d.path, d.signedUrl]));
+
   return rows.map((e) => ({
     id: e.id,
     name: e.name,
@@ -220,6 +231,7 @@ export async function getLibraryExercises(
     target: e.target,
     instructions: e.instructions ?? undefined,
     source: e.source as LibraryExercise["source"],
+    imageUrl: (e.imagePath && urlByPath.get(e.imagePath)) || undefined,
   }));
 }
 

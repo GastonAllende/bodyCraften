@@ -17,6 +17,7 @@ import {
 import { getUser } from "@/lib/auth";
 import { BODY_PHOTOS_BUCKET } from "@/lib/body-photos";
 import { findCanonical } from "@/lib/exercise-catalog";
+import { EXERCISE_IMAGES_BUCKET } from "@/lib/exercise-images";
 import { fmt, isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/server";
 import { estimateOneRepMax } from "@/lib/overload";
@@ -25,6 +26,8 @@ import { isPositiveDecimal, isValidRepRange } from "@/lib/validation";
 import type {
   BodyEntryInput,
   BodyEntryUpdateInput,
+  ExerciseInput,
+  ExerciseUpdateInput,
   PlanExerciseInput,
   PlanInput,
   PlanUpdateInput,
@@ -207,12 +210,7 @@ export async function resetWorkoutHistory(): Promise<
   return { ok: true, data: { deleted: deleted.length } };
 }
 
-export async function addCustomExercise(input: {
-  name: string;
-  bodyPart: string;
-  equipment: string;
-  target: string;
-}): Promise<ActionResult> {
+export async function addCustomExercise(input: ExerciseInput): Promise<ActionResult> {
   const { user, error } = await requireUser();
   if (!user) return { ok: false, error };
   const db = getDb();
@@ -221,6 +219,7 @@ export async function addCustomExercise(input: {
     const t = await getDictionary();
     return { ok: false, error: t.actions.giveExerciseName };
   }
+  const imagePath = input.imagePath?.trim() || null;
   const inserted = await db
     .insert(exercises)
     .values({
@@ -229,14 +228,81 @@ export async function addCustomExercise(input: {
       bodyPart: input.bodyPart.trim() || "other",
       equipment: input.equipment.trim() || "other",
       target: input.target.trim() || "other",
+      instructions: input.instructions?.trim() || null,
+      imagePath,
       source: "custom",
     })
     .onConflictDoNothing({ target: [exercises.name, exercises.userId] })
     .returning();
   if (inserted.length === 0) {
+    // The name collided, so this exercise was never saved — an image the
+    // client already uploaded for it would otherwise be orphaned forever.
+    if (imagePath) {
+      const supabase = await createClient();
+      const { error: storageError } = await supabase.storage
+        .from(EXERCISE_IMAGES_BUCKET)
+        .remove([imagePath]);
+      if (storageError) {
+        console.error("Failed to remove orphaned exercise image:", storageError);
+      }
+    }
     const t = await getDictionary();
     return { ok: false, error: fmt(t.actions.alreadyInLibrary, { name }) };
   }
+  revalidateApp();
+  return { ok: true };
+}
+
+/**
+ * Edits an exercise this user owns. `name` can't change — see
+ * `ExerciseUpdateInput`. Scoped by `id AND user_id` so a built-in catalog row
+ * (`user_id IS NULL`) can never match, matching `isOwned()` in the UI.
+ */
+export async function updateExercise(
+  id: number,
+  input: ExerciseUpdateInput,
+): Promise<ActionResult> {
+  const { user, error } = await requireUser();
+  if (!user) return { ok: false, error };
+  const db = getDb();
+  const t = await getDictionary();
+
+  const [existing] = await db
+    .select({ imagePath: exercises.imagePath })
+    .from(exercises)
+    .where(and(eq(exercises.id, id), eq(exercises.userId, user.id)));
+  if (!existing) return { ok: false, error: t.actions.notFound };
+
+  const imagePath =
+    input.imagePath === undefined ? existing.imagePath : input.imagePath;
+
+  // A replaced or removed image orphans the old storage object — clean it up
+  // best-effort, same as updateBodyEntry below.
+  if (
+    input.imagePath !== undefined &&
+    existing.imagePath &&
+    existing.imagePath !== input.imagePath
+  ) {
+    const supabase = await createClient();
+    const { error: storageError } = await supabase.storage
+      .from(EXERCISE_IMAGES_BUCKET)
+      .remove([existing.imagePath]);
+    if (storageError) {
+      console.error("Failed to remove replaced exercise image:", storageError);
+    }
+  }
+
+  await db
+    .update(exercises)
+    .set({
+      bodyPart: input.bodyPart.trim() || "other",
+      equipment: input.equipment.trim() || "other",
+      target: input.target.trim() || "other",
+      instructions: input.instructions?.trim() || null,
+      imagePath,
+    })
+    .where(and(eq(exercises.id, id), eq(exercises.userId, user.id)));
+
   revalidateApp();
   return { ok: true };
 }
@@ -293,6 +359,16 @@ export async function removeExercise(name: string): Promise<ActionResult> {
   if (deleted.length === 0) {
     const t = await getDictionary();
     return { ok: false, error: fmt(t.actions.notInLibrary, { name: trimmed }) };
+  }
+  const imagePath = deleted[0].imagePath;
+  if (imagePath) {
+    const supabase = await createClient();
+    const { error: storageError } = await supabase.storage
+      .from(EXERCISE_IMAGES_BUCKET)
+      .remove([imagePath]);
+    if (storageError) {
+      console.error("Failed to remove exercise image from storage:", storageError);
+    }
   }
   revalidateApp();
   return { ok: true };
