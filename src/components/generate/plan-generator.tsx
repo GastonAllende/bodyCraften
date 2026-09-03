@@ -22,13 +22,16 @@ import { createPlan } from "@/lib/actions";
 import { fmt } from "@/lib/i18n/config";
 import type { GeneratedPlan } from "@/lib/types";
 
+type GenState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "result"; plan: GeneratedPlan; isDemo: boolean };
+
 export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
   const router = useRouter();
   const { t } = useI18n();
   const [prompt, setPrompt] = useState("");
-  const [plan, setPlan] = useState<GeneratedPlan | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [gen, setGen] = useState<GenState>({ status: "idle" });
   const [saving, startSaving] = useTransition();
 
   async function generate() {
@@ -36,8 +39,7 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
       toast.error(t.generatePage.promptTooShort);
       return;
     }
-    setLoading(true);
-    setPlan(null);
+    setGen({ status: "loading" });
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -51,19 +53,19 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
       };
       if (!res.ok || !data.plan) {
         toast.error(data.error ?? t.generatePage.generateFailed);
+        setGen({ status: "idle" });
         return;
       }
-      setPlan(data.plan);
-      setIsDemo(Boolean(data.demo));
+      setGen({ status: "result", plan: data.plan, isDemo: Boolean(data.demo) });
     } catch {
       toast.error(t.generatePage.networkError);
-    } finally {
-      setLoading(false);
+      setGen({ status: "idle" });
     }
   }
 
   function savePlan() {
-    if (!plan) return;
+    if (gen.status !== "result") return;
+    const plan = gen.plan;
     startSaving(async () => {
       const result = await createPlan({
         name: plan.name,
@@ -132,15 +134,17 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
             ))}
           </div>
           <div className="flex justify-end">
-            <Button onClick={generate} disabled={loading}>
+            <Button onClick={generate} disabled={gen.status === "loading"}>
               <Sparkles className="size-4" />
-              {loading ? t.generatePage.generating : t.generatePage.generate}
+              {gen.status === "loading"
+                ? t.generatePage.generating
+                : t.generatePage.generate}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {loading && (
+      {gen.status === "loading" && (
         <Card aria-busy>
           <CardHeader className="pb-3">
             <Skeleton className="h-5 w-48" />
@@ -160,7 +164,7 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
       )}
 
       <AnimatePresence>
-        {plan && !loading && (
+        {gen.status === "result" && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
@@ -170,17 +174,17 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
             <Card className="border-primary/30">
               <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle className="text-base">{plan.name}</CardTitle>
-                  {isDemo && (
+                  <CardTitle className="text-base">{gen.plan.name}</CardTitle>
+                  {gen.isDemo && (
                     <Badge variant="secondary">{t.generatePage.demoBadge}</Badge>
                   )}
-                  {!isDemo && (
+                  {!gen.isDemo && (
                     <Badge className="gap-1 bg-violet-500/15 text-violet-600 hover:bg-violet-500/20 dark:text-violet-400">
                       <Sparkles className="size-3" /> AI
                     </Badge>
                   )}
                 </div>
-                <CardDescription>{plan.description}</CardDescription>
+                <CardDescription>{gen.plan.description}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <motion.div
@@ -192,7 +196,7 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
                     show: { transition: { staggerChildren: 0.07 } },
                   }}
                 >
-                  {plan.days.map((day) => (
+                  {gen.plan.days.map((day) => (
                     <motion.div
                       key={day.name}
                       variants={{
@@ -230,7 +234,10 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
                 </motion.div>
 
                 <div className="flex flex-wrap justify-end gap-2 pt-1">
-                  <Button variant="ghost" onClick={() => setPlan(null)}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setGen({ status: "idle" })}
+                  >
                     {t.generatePage.discard}
                   </Button>
                   <Button variant="secondary" onClick={generate}>

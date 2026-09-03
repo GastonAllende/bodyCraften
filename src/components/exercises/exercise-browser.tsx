@@ -1,17 +1,15 @@
 "use client";
 
-import { useRef, useMemo, useState, useTransition, type ChangeEvent } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import {
   BookmarkCheck,
   BookmarkPlus,
   BookmarkX,
-  ImagePlus,
   Pencil,
   Plus,
   Search,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -26,9 +24,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/components/i18n-provider";
+import type { ImagePickerAction } from "@/hooks/use-image-picker";
 import {
   addCustomExercise,
   importExercise,
@@ -38,17 +35,16 @@ import {
 import { EXERCISE_IMAGES_BUCKET } from "@/lib/exercise-images";
 import { fmt } from "@/lib/i18n/config";
 import { createClient } from "@/lib/supabase/client";
-import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/uploads";
 import { cn } from "@/lib/utils";
 import type { LibraryExercise } from "@/lib/types";
+import { ExerciseFormDialog, type ExerciseDraft } from "./exercise-form-dialog";
 
 const PAGE_SIZE = 48;
 
-/** `keep` and `remove` only apply when editing — a new exercise has no existing image. */
-type ExerciseImageAction =
-  | { type: "keep" }
-  | { type: "remove" }
-  | { type: "replace"; file: File };
+type ExerciseDialog =
+  | { type: "detail"; exercise: LibraryExercise }
+  | { type: "remove"; exercise: LibraryExercise }
+  | { type: "form"; target: LibraryExercise | "new" };
 
 /**
  * What the user reads. `name` stays canonical English because it is the key the
@@ -82,13 +78,14 @@ export function ExerciseBrowser({
   const [scope, setScope] = useState<"all" | "saved">("all");
   const [bodyPart, setBodyPart] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const [selected, setSelected] = useState<LibraryExercise | null>(null);
+  const [dialog, setDialog] = useState<ExerciseDialog | null>(null);
   const [savingName, setSavingName] = useState<string | null>(null);
-  const [removing, setRemoving] = useState<LibraryExercise | null>(null);
-  const [formTarget, setFormTarget] = useState<LibraryExercise | "new" | null>(
-    null,
-  );
   const [, startSaving] = useTransition();
+  const [savingExercise, startSavingExercise] = useTransition();
+
+  const detailExercise = dialog?.type === "detail" ? dialog.exercise : null;
+  const removingExercise = dialog?.type === "remove" ? dialog.exercise : null;
+  const formTarget = dialog?.type === "form" ? dialog.target : null;
 
   const saved = useMemo(() => exercises.filter(isOwned), [exercises]);
   const scoped = scope === "saved" ? saved : exercises;
@@ -151,12 +148,59 @@ export function ExerciseBrowser({
     startSaving(async () => {
       const result = await removeExercise(exercise.name);
       setSavingName(null);
-      setRemoving(null);
+      setDialog(null);
       if (result.ok) {
         toast.success(fmt(t.exercisesPage.removed, { name: label(exercise) }));
-        // The card either vanishes (custom) or reverts to a catalog row, so drop
-        // the detail dialog rather than leave it showing a stale exercise.
-        setSelected(null);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    });
+  }
+
+  function handleSaveExercise(draft: ExerciseDraft, image: ImagePickerAction) {
+    const target = formTarget;
+    startSavingExercise(async () => {
+      let imagePath: string | null | undefined;
+      if (image.type === "remove") {
+        imagePath = null;
+      } else if (image.type === "replace") {
+        const supabase = createClient();
+        const ext = image.file.name.split(".").pop() || "jpg";
+        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage
+          .from(EXERCISE_IMAGES_BUCKET)
+          .upload(path, image.file, { contentType: image.file.type });
+        if (error) {
+          toast.error(t.exercisesPage.imageUploadFailed);
+          return;
+        }
+        imagePath = path;
+      }
+
+      const fields = {
+        bodyPart: draft.bodyPart,
+        equipment: draft.equipment,
+        target: draft.target,
+        instructions: draft.instructions,
+      };
+
+      const result =
+        target && target !== "new"
+          ? await updateExercise(target.id!, { ...fields, imagePath })
+          : await addCustomExercise({
+              name: draft.name,
+              ...fields,
+              imagePath: imagePath ?? undefined,
+            });
+
+      if (result.ok) {
+        toast.success(
+          target && target !== "new"
+            ? fmt(t.exercisesPage.updated, { name: label(target) })
+            : fmt(t.exercisesPage.added, { name: draft.name.trim() }),
+        );
+        setDialog(null);
         router.refresh();
       } else {
         toast.error(result.error);
@@ -179,7 +223,10 @@ export function ExerciseBrowser({
             className="pl-8"
           />
         </div>
-        <Button variant="secondary" onClick={() => setFormTarget("new")}>
+        <Button
+          variant="secondary"
+          onClick={() => setDialog({ type: "form", target: "new" })}
+        >
           <Plus className="size-4" /> {t.exercisesPage.newExercise}
         </Button>
       </div>
@@ -243,7 +290,7 @@ export function ExerciseBrowser({
             >
               <Card
                 className="h-full cursor-pointer transition-colors hover:border-primary/40"
-                onClick={() => setSelected(exercise)}
+                onClick={() => setDialog({ type: "detail", exercise })}
               >
                 <CardContent className="flex h-full flex-col gap-2 p-4">
                   <div className="flex items-start justify-between gap-2">
@@ -279,7 +326,7 @@ export function ExerciseBrowser({
                         disabled={savingName === exercise.name}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setRemoving(exercise);
+                          setDialog({ type: "remove", exercise });
                         }}
                       >
                         <BookmarkCheck className="size-4 group-hover/bookmark:hidden" />
@@ -327,53 +374,55 @@ export function ExerciseBrowser({
       )}
 
       <Dialog
-        open={selected !== null}
-        onOpenChange={(open) => !open && setSelected(null)}
+        open={detailExercise !== null}
+        onOpenChange={(open) => !open && setDialog(null)}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{selected && label(selected)}</DialogTitle>
+            <DialogTitle>{detailExercise && label(detailExercise)}</DialogTitle>
             <DialogDescription className="capitalize">
-              {selected
-                ? (t.exercisesPage.bodyParts[selected.bodyPart] ??
-                  selected.bodyPart)
+              {detailExercise
+                ? (t.exercisesPage.bodyParts[detailExercise.bodyPart] ??
+                  detailExercise.bodyPart)
                 : null}{" "}
-              · {selected?.equipment} · {t.exercisesPage.targets}{" "}
-              {selected?.target}
+              · {detailExercise?.equipment} · {t.exercisesPage.targets}{" "}
+              {detailExercise?.target}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1 text-sm leading-relaxed text-muted-foreground">
-            {selected?.imageUrl && (
+            {detailExercise?.imageUrl && (
               // Signed Storage URLs skip next/image here, same as body photos.
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={selected.imageUrl}
+                src={detailExercise.imageUrl}
                 alt=""
                 className="w-full rounded-md border object-cover"
               />
             )}
-            {selected?.instructionSteps?.length ? (
+            {detailExercise?.instructionSteps?.length ? (
               <div className="space-y-1.5">
                 <h3 className="font-medium text-foreground">
                   {t.exercisesPage.howToTitle}
                 </h3>
                 <ol className="list-decimal space-y-1 pl-5">
-                  {selected.instructionSteps.map((step, i) => (
+                  {detailExercise.instructionSteps.map((step, i) => (
                     <li key={i}>{step}</li>
                   ))}
                 </ol>
               </div>
             ) : (
-              <p>{selected?.instructions || t.exercisesPage.noInstructions}</p>
+              <p>
+                {detailExercise?.instructions || t.exercisesPage.noInstructions}
+              </p>
             )}
           </div>
-          {selected && (selected.remote || isOwned(selected)) && (
+          {detailExercise && (detailExercise.remote || isOwned(detailExercise)) && (
             <DialogFooter>
-              {selected.remote ? (
+              {detailExercise.remote ? (
                 <Button
                   onClick={() => {
-                    saveRemote(selected);
-                    setSelected(null);
+                    saveRemote(detailExercise);
+                    setDialog(null);
                   }}
                 >
                   <BookmarkPlus className="size-4" />{" "}
@@ -383,22 +432,20 @@ export function ExerciseBrowser({
                 <>
                   <Button
                     variant="outline"
-                    onClick={() => {
+                    onClick={() =>
                       // Hand over to the edit dialog rather than stacking two.
-                      setSelected(null);
-                      setFormTarget(selected);
-                    }}
+                      setDialog({ type: "form", target: detailExercise })
+                    }
                   >
                     <Pencil className="size-4" /> {t.exercisesPage.edit}
                   </Button>
                   <Button
                     variant="outline"
                     className="text-destructive hover:text-destructive"
-                    onClick={() => {
+                    onClick={() =>
                       // Hand over to the confirm dialog rather than stacking two.
-                      setSelected(null);
-                      setRemoving(selected);
-                    }}
+                      setDialog({ type: "remove", exercise: detailExercise })
+                    }
                   >
                     <BookmarkX className="size-4" />{" "}
                     {t.exercisesPage.removeFromLibrary}
@@ -411,29 +458,33 @@ export function ExerciseBrowser({
       </Dialog>
 
       <Dialog
-        open={removing !== null}
-        onOpenChange={(open) => !open && setRemoving(null)}
+        open={removingExercise !== null}
+        onOpenChange={(open) => !open && setDialog(null)}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {removing &&
-                fmt(t.exercisesPage.removeTitle, { name: label(removing) })}
+              {removingExercise &&
+                fmt(t.exercisesPage.removeTitle, {
+                  name: label(removingExercise),
+                })}
             </DialogTitle>
             <DialogDescription>
               {t.exercisesPage.removeDesc}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRemoving(null)}>
+            <Button variant="ghost" onClick={() => setDialog(null)}>
               {t.common.cancel}
             </Button>
             <Button
               variant="destructive"
-              disabled={removing !== null && savingName === removing.name}
-              onClick={() => removing && confirmRemove(removing)}
+              disabled={
+                removingExercise !== null && savingName === removingExercise.name
+              }
+              onClick={() => removingExercise && confirmRemove(removingExercise)}
             >
-              {removing !== null && savingName === removing.name
+              {removingExercise !== null && savingName === removingExercise.name
                 ? t.common.deleting
                 : t.common.delete}
             </Button>
@@ -443,14 +494,11 @@ export function ExerciseBrowser({
 
       <ExerciseFormDialog
         key={formTarget === "new" || formTarget === null ? "new" : formTarget.id}
-        userId={userId}
         exercise={formTarget === "new" ? null : formTarget}
         open={formTarget !== null}
-        onOpenChange={(open) => !open && setFormTarget(null)}
-        onSaved={() => {
-          setFormTarget(null);
-          router.refresh();
-        }}
+        saving={savingExercise}
+        onOpenChange={(open) => !open && setDialog(null)}
+        onSave={handleSaveExercise}
       />
     </div>
   );
@@ -504,242 +552,5 @@ function FilterChip({
     >
       {label}
     </button>
-  );
-}
-
-/**
- * Add/edit dialog for an owned exercise. `exercise` present means edit mode:
- * name renders as static text (it's the join key for logged sets and plan
- * entries — see `ExerciseUpdateInput` — so it can't be changed here) and
- * submit calls `updateExercise` instead of `addCustomExercise`.
- */
-function ExerciseFormDialog({
-  userId,
-  exercise,
-  open,
-  onOpenChange,
-  onSaved,
-}: {
-  userId: string;
-  exercise: LibraryExercise | null;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSaved: () => void;
-}) {
-  const { t } = useI18n();
-  const [name, setName] = useState(exercise?.name ?? "");
-  const [bodyPart, setBodyPart] = useState(exercise?.bodyPart ?? "");
-  const [equipment, setEquipment] = useState(exercise?.equipment ?? "");
-  const [target, setTarget] = useState(exercise?.target ?? "");
-  const [instructions, setInstructions] = useState(exercise?.instructions ?? "");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageCleared, setImageCleared] = useState(false);
-  const [saving, startSaving] = useTransition();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    e.target.value = "";
-    if (!file) return;
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      toast.error(t.exercisesPage.imageInvalidType);
-      return;
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      toast.error(t.exercisesPage.imageTooLarge);
-      return;
-    }
-    setImageFile(file);
-    setImageCleared(false);
-    setImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
-  }
-
-  function removeImage() {
-    setImageFile(null);
-    setImageCleared(true);
-    setImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-  }
-
-  const existingImageUrl =
-    !imageFile && !imageCleared ? (exercise?.imageUrl ?? null) : null;
-  const displayedImage = imagePreview ?? existingImageUrl;
-
-  function submit() {
-    startSaving(async () => {
-      const imageAction: ExerciseImageAction = imageFile
-        ? { type: "replace", file: imageFile }
-        : exercise && imageCleared
-          ? { type: "remove" }
-          : { type: "keep" };
-
-      let imagePath: string | null | undefined;
-      if (imageAction.type === "remove") {
-        imagePath = null;
-      } else if (imageAction.type === "replace") {
-        const supabase = createClient();
-        const ext = imageAction.file.name.split(".").pop() || "jpg";
-        const path = `${userId}/${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage
-          .from(EXERCISE_IMAGES_BUCKET)
-          .upload(path, imageAction.file, { contentType: imageAction.file.type });
-        if (error) {
-          toast.error(t.exercisesPage.imageUploadFailed);
-          return;
-        }
-        imagePath = path;
-      }
-
-      const fields = {
-        bodyPart,
-        equipment,
-        target,
-        instructions: instructions.trim() || undefined,
-      };
-
-      const result = exercise
-        ? await updateExercise(exercise.id!, { ...fields, imagePath })
-        : await addCustomExercise({
-            name,
-            ...fields,
-            imagePath: imagePath ?? undefined,
-          });
-
-      if (result.ok) {
-        toast.success(
-          exercise
-            ? fmt(t.exercisesPage.updated, { name: label(exercise) })
-            : fmt(t.exercisesPage.added, { name: name.trim() }),
-        );
-        onSaved();
-      } else {
-        toast.error(result.error);
-      }
-    });
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {exercise ? t.exercisesPage.editCustomTitle : t.exercisesPage.addCustomTitle}
-          </DialogTitle>
-          <DialogDescription>
-            {exercise ? t.exercisesPage.editCustomDesc : t.exercisesPage.addCustomDesc}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid max-h-[60vh] gap-3 overflow-y-auto pr-1">
-          <div className="grid gap-1.5">
-            <Label htmlFor="ex-name">{t.exercisesPage.name}</Label>
-            {exercise ? (
-              <p className="text-sm font-medium">{name}</p>
-            ) : (
-              <Input
-                id="ex-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t.exercisesPage.namePlaceholder}
-              />
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="ex-body">{t.exercisesPage.bodyPart}</Label>
-              <Input
-                id="ex-body"
-                value={bodyPart}
-                onChange={(e) => setBodyPart(e.target.value)}
-                placeholder={t.exercisesPage.bodyPartPlaceholder}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="ex-equipment">{t.exercisesPage.equipment}</Label>
-              <Input
-                id="ex-equipment"
-                value={equipment}
-                onChange={(e) => setEquipment(e.target.value)}
-                placeholder={t.exercisesPage.equipmentPlaceholder}
-              />
-            </div>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="ex-target">{t.exercisesPage.targetMuscle}</Label>
-            <Input
-              id="ex-target"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              placeholder={t.exercisesPage.targetPlaceholder}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="ex-instructions">{t.exercisesPage.instructionsLabel}</Label>
-            <Textarea
-              id="ex-instructions"
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder={t.exercisesPage.instructionsPlaceholder}
-              rows={4}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <Label>{t.exercisesPage.imageLabel}</Label>
-            {displayedImage ? (
-              <div className="relative w-28">
-                {/* Local blob previews and signed Storage URLs both skip next/image here. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={displayedImage}
-                  alt=""
-                  className="size-28 rounded-md border object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={removeImage}
-                  aria-label={t.exercisesPage.removeImage}
-                  className="absolute -right-2 -top-2 rounded-full border bg-background p-1 shadow-sm"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-fit"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <ImagePlus className="size-4" /> {t.exercisesPage.imageLabel}
-              </Button>
-            )}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={ALLOWED_IMAGE_TYPES.join(",")}
-              className="hidden"
-              onChange={handleImageChange}
-            />
-            <p className="text-xs text-muted-foreground">{t.exercisesPage.imageHint}</p>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button onClick={submit} disabled={saving || name.trim().length < 2}>
-            {saving
-              ? exercise
-                ? t.exercisesPage.saving
-                : t.exercisesPage.adding
-              : exercise
-                ? t.exercisesPage.saveChanges
-                : t.exercisesPage.add}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

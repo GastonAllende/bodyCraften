@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent } from "react";
+import { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/components/i18n-provider";
+import { useImagePicker, type ImagePickerAction } from "@/hooks/use-image-picker";
 import { todayIso } from "@/lib/overload";
-import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/uploads";
+import { ALLOWED_IMAGE_TYPES } from "@/lib/uploads";
 import { isPositiveDecimal, sanitizeDecimal } from "@/lib/validation";
 import type { BodyEntryWithPhoto } from "@/lib/types";
 
@@ -35,10 +36,7 @@ export type BodyEntryDraft = {
 };
 
 /** `keep` and `remove` only apply when editing — a new entry has no existing photo. */
-export type BodyPhotoAction =
-  | { type: "keep" }
-  | { type: "remove" }
-  | { type: "replace"; file: File };
+export type BodyPhotoAction = ImagePickerAction;
 
 function emptyDraft(): BodyEntryDraft {
   return {
@@ -86,9 +84,12 @@ export function BodyEntryForm({
   const [draft, setDraft] = useState<BodyEntryDraft>(() =>
     editingEntry ? draftFromEntry(editingEntry) : emptyDraft(),
   );
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [photoCleared, setPhotoCleared] = useState(false);
+  const photo = useImagePicker({
+    existingUrl: editingEntry?.photoUrl ?? null,
+    hasExisting: Boolean(editingEntry),
+    onInvalidType: () => toast.error(t.bodyPage.photoInvalidType),
+    onTooLarge: () => toast.error(t.bodyPage.photoTooLarge),
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function setMeasurement(
@@ -98,39 +99,6 @@ export function BodyEntryForm({
     setDraft((d) => ({ ...d, [key]: sanitizeDecimal(value) }));
   }
 
-  function handlePhotoChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    e.target.value = "";
-    if (!file) return;
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      toast.error(t.bodyPage.photoInvalidType);
-      return;
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      toast.error(t.bodyPage.photoTooLarge);
-      return;
-    }
-    setPhotoFile(file);
-    setPhotoCleared(false);
-    setPhotoPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
-    });
-  }
-
-  function removePhoto() {
-    setPhotoFile(null);
-    setPhotoCleared(true);
-    setPhotoPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-  }
-
-  const existingPhotoUrl =
-    !photoFile && !photoCleared ? (editingEntry?.photoUrl ?? null) : null;
-  const displayedPhoto = photoPreview ?? existingPhotoUrl;
-
   const hasAnyMeasurement = MEASUREMENT_KEYS.some(
     (k) => draft[k].trim() !== "",
   );
@@ -139,20 +107,15 @@ export function BodyEntryForm({
   );
   const canSave =
     Boolean(draft.date) &&
-    (hasAnyMeasurement || displayedPhoto != null) &&
+    (hasAnyMeasurement || photo.displayedUrl != null) &&
     !hasInvalidMeasurement;
 
   function handleSubmit() {
     if (!canSave) return;
-    const photoAction: BodyPhotoAction = photoFile
-      ? { type: "replace", file: photoFile }
-      : editingEntry && photoCleared
-        ? { type: "remove" }
-        : { type: "keep" };
-    onSave(draft, photoAction);
+    onSave(draft, photo.action);
     if (!editingEntry) {
       setDraft(emptyDraft());
-      removePhoto();
+      photo.reset();
     }
   }
 
@@ -215,18 +178,18 @@ export function BodyEntryForm({
 
         <div className="grid gap-1.5">
           <Label>{t.bodyPage.photo}</Label>
-          {displayedPhoto ? (
+          {photo.displayedUrl ? (
             <div className="relative w-28">
               {/* Local blob previews and signed Storage URLs both skip next/image here. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={displayedPhoto}
+                src={photo.displayedUrl}
                 alt=""
                 className="size-28 rounded-md border object-cover"
               />
               <button
                 type="button"
-                onClick={removePhoto}
+                onClick={photo.onRemove}
                 aria-label={t.bodyPage.removePhoto}
                 className="absolute -right-2 -top-2 rounded-full border bg-background p-1 shadow-sm"
               >
@@ -248,7 +211,7 @@ export function BodyEntryForm({
             type="file"
             accept={ALLOWED_IMAGE_TYPES.join(",")}
             className="hidden"
-            onChange={handlePhotoChange}
+            onChange={photo.onChange}
           />
           <p className="text-xs text-muted-foreground">{t.bodyPage.photoHint}</p>
         </div>

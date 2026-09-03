@@ -46,9 +46,15 @@ export function BodyHistoryList({
 }) {
   const router = useRouter();
   const { locale, t } = useI18n();
-  const [confirming, setConfirming] = useState<BodyEntryWithPhoto | null>(null);
-  const [viewingPhoto, setViewingPhoto] = useState<BodyEntryWithPhoto | null>(null);
+  const [dialog, setDialog] = useState<
+    | { type: "confirm"; entry: BodyEntryWithPhoto }
+    | { type: "photo"; entry: BodyEntryWithPhoto }
+    | null
+  >(null);
   const [deleting, startDeleting] = useTransition();
+
+  const confirming = dialog?.type === "confirm" ? dialog.entry : null;
+  const viewingPhoto = dialog?.type === "photo" ? dialog.entry : null;
 
   if (entries.length === 0) {
     return (
@@ -66,7 +72,7 @@ export function BodyHistoryList({
             {entry.photoUrl && (
               <button
                 type="button"
-                onClick={() => setViewingPhoto(entry)}
+                onClick={() => setDialog({ type: "photo", entry })}
                 aria-label={t.bodyPage.enlargePhoto}
                 className="shrink-0 rounded-md focus-visible:outline-2 focus-visible:outline-ring"
               >
@@ -100,7 +106,7 @@ export function BodyHistoryList({
                     size="sm"
                     aria-label={t.bodyPage.deleteEntry}
                     className="text-red-500 hover:text-red-600"
-                    onClick={() => setConfirming(entry)}
+                    onClick={() => setDialog({ type: "confirm", entry })}
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -148,7 +154,7 @@ export function BodyHistoryList({
 
       <Dialog
         open={confirming !== null}
-        onOpenChange={(open) => !open && setConfirming(null)}
+        onOpenChange={(open) => !open && setDialog(null)}
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -160,7 +166,7 @@ export function BodyHistoryList({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirming(null)}>
+            <Button variant="ghost" onClick={() => setDialog(null)}>
               {t.common.cancel}
             </Button>
             <Button
@@ -173,7 +179,7 @@ export function BodyHistoryList({
                   const result = await deleteBodyEntry(id);
                   if (result.ok) {
                     toast.success(t.bodyPage.deleted);
-                    setConfirming(null);
+                    setDialog(null);
                     router.refresh();
                   } else {
                     toast.error(result.error);
@@ -189,7 +195,7 @@ export function BodyHistoryList({
 
       <Dialog
         open={viewingPhoto !== null}
-        onOpenChange={(open) => !open && setViewingPhoto(null)}
+        onOpenChange={(open) => !open && setDialog(null)}
       >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader className="sr-only">
