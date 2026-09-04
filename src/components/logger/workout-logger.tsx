@@ -2,59 +2,28 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
-import {
-  Check,
-  CheckCheck,
-  ClipboardList,
-  Copy,
-  Dumbbell,
-  Plus,
-  Trash2,
-  X,
-} from "lucide-react";
+import { AnimatePresence } from "motion/react";
+import { ClipboardList, Dumbbell, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import {
-  Command,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { useI18n } from "@/components/i18n-provider";
 import { saveWorkout } from "@/lib/actions";
 import { fmt } from "@/lib/i18n/config";
-import { formatShortDate, formatVolume, todayIso } from "@/lib/overload";
-import { cn } from "@/lib/utils";
-import { sanitizeDecimal, sanitizeInteger } from "@/lib/validation";
+import { todayIso } from "@/lib/overload";
 import type {
   LastSessionHints,
   LibraryExercise,
   ScheduledDayPrefill,
 } from "@/lib/types";
-
-type SetRow = { weight: string; reps: string; done: boolean };
-type LoggedExercise = {
-  key: string;
-  name: string;
-  targetReps?: string;
-  sets: SetRow[];
-};
+import { ExercisePickerDialog } from "./exercise-picker-dialog";
+import { parseNum, type SetRow } from "./exercise-set-row";
+import { LoggedExerciseCard, type LoggedExercise } from "./logged-exercise-card";
+import { WorkoutSummaryBar } from "./workout-summary-bar";
 
 function newKey() {
   return Math.random().toString(36).slice(2);
-}
-
-function parseNum(value: string): number {
-  const n = Number(value.replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
 }
 
 export function WorkoutLogger({
@@ -118,6 +87,10 @@ export function WorkoutLogger({
     setQuery("");
   }
 
+  function removeExercise(key: string) {
+    setExercises((prev) => prev.filter((e) => e.key !== key));
+  }
+
   function startFromPrefill(prefill: ScheduledDayPrefill) {
     setScheduleEntryId(prefill.entryId);
     setWorkoutName(prefill.label);
@@ -146,6 +119,22 @@ export function WorkoutLogger({
           : e,
       ),
     );
+  }
+
+  function addSet(exerciseKey: string) {
+    setExercises((prev) =>
+      prev.map((e) =>
+        e.key === exerciseKey
+          ? { ...e, sets: [...e.sets, { ...e.sets[e.sets.length - 1], done: false }] }
+          : e,
+      ),
+    );
+  }
+
+  function discard() {
+    setExercises([]);
+    setScheduleEntryId(null);
+    setWorkoutName("");
   }
 
   function finishWorkout() {
@@ -240,11 +229,7 @@ export function WorkoutLogger({
                 variant="ghost"
                 size="sm"
                 className="ml-auto text-muted-foreground"
-                onClick={() => {
-                  setExercises([]);
-                  setScheduleEntryId(null);
-                  setWorkoutName("");
-                }}
+                onClick={discard}
               >
                 <X className="size-4" /> {t.logger.discard}
               </Button>
@@ -252,188 +237,18 @@ export function WorkoutLogger({
           </CardHeader>
           <CardContent className="space-y-4">
             <AnimatePresence initial={false}>
-              {exercises.map((exercise) => {
-                const hint = hints[exercise.name];
-                return (
-                  <motion.div
-                    key={exercise.key}
-                    layout
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.98 }}
-                    transition={{ duration: 0.25, ease: "easeOut" }}
-                    className="rounded-lg border p-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-medium leading-tight">
-                          {exercise.name}
-                          {exercise.targetReps && (
-                            <Badge variant="secondary" className="ml-2">
-                              {fmt(t.logger.targetReps, {
-                                reps: exercise.targetReps,
-                              })}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="mt-0.5 text-xs text-muted-foreground">
-                          {hint
-                            ? fmt(t.logger.lastTime, {
-                                date: formatShortDate(hint.date, locale),
-                                sets: hint.sets
-                                  .map((s) => `${s.weightKg}×${s.reps}`)
-                                  .join("  "),
-                              })
-                            : t.logger.firstTime}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 text-muted-foreground"
-                        aria-label={fmt(t.logger.removeExercise, {
-                          name: exercise.name,
-                        })}
-                        onClick={() =>
-                          setExercises((prev) =>
-                            prev.filter((e) => e.key !== exercise.key),
-                          )
-                        }
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-
-                    <div className="mt-3 space-y-1.5">
-                      <div className="grid grid-cols-[2rem_1fr_1fr_2.25rem] items-center gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:grid-cols-[2.5rem_5rem_1fr_1fr_2.25rem]">
-                        <span>{t.logger.setColumn}</span>
-                        <span className="hidden sm:block">
-                          {t.logger.prevColumn}
-                        </span>
-                        <span>{t.logger.kgColumn}</span>
-                        <span>{t.logger.repsColumn}</span>
-                        <span />
-                      </div>
-                      {exercise.sets.map((set, i) => {
-                        const prev = hint?.sets[i];
-                        const filled = parseNum(set.reps) > 0;
-                        return (
-                          <div
-                            key={i}
-                            className="grid grid-cols-[2rem_1fr_1fr_2.25rem] items-center gap-2 sm:grid-cols-[2.5rem_5rem_1fr_1fr_2.25rem]"
-                          >
-                            <span className="text-center text-sm text-muted-foreground tabular-nums">
-                              {i + 1}
-                            </span>
-                            <button
-                              type="button"
-                              className="hidden truncate rounded px-1 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground sm:block"
-                              title={t.logger.copyLastSet}
-                              onClick={() =>
-                                prev &&
-                                updateSet(exercise.key, i, {
-                                  weight: String(prev.weightKg),
-                                  reps: String(prev.reps),
-                                })
-                              }
-                            >
-                              {prev ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Copy className="size-3" />
-                                  {prev.weightKg}×{prev.reps}
-                                </span>
-                              ) : (
-                                "—"
-                              )}
-                            </button>
-                            <Input
-                              inputMode="decimal"
-                              placeholder={prev ? String(prev.weightKg) : "0"}
-                              value={set.weight}
-                              onChange={(e) =>
-                                updateSet(exercise.key, i, {
-                                  weight: sanitizeDecimal(e.target.value),
-                                })
-                              }
-                              className="h-9 text-center tabular-nums"
-                              aria-label={fmt(t.logger.setWeight, {
-                                name: exercise.name,
-                                number: i + 1,
-                              })}
-                            />
-                            <Input
-                              inputMode="numeric"
-                              placeholder={prev ? String(prev.reps) : "0"}
-                              value={set.reps}
-                              // A blank row is fine — it just isn't logged. A
-                              // typed 0 is a mistake worth pointing at.
-                              aria-invalid={set.reps !== "" && !filled}
-                              onChange={(e) =>
-                                updateSet(exercise.key, i, {
-                                  reps: sanitizeInteger(e.target.value),
-                                })
-                              }
-                              className="h-9 text-center tabular-nums"
-                              aria-label={fmt(t.logger.setReps, {
-                                name: exercise.name,
-                                number: i + 1,
-                              })}
-                            />
-                            <Button
-                              type="button"
-                              variant={set.done ? "default" : "outline"}
-                              size="icon"
-                              className={cn(
-                                "size-9",
-                                set.done &&
-                                  "bg-emerald-600 text-white hover:bg-emerald-600/90",
-                              )}
-                              aria-label={t.logger.markSetDone}
-                              onClick={() => {
-                                if (!set.done && !filled && prev) {
-                                  updateSet(exercise.key, i, {
-                                    weight: String(prev.weightKg),
-                                    reps: String(prev.reps),
-                                    done: true,
-                                  });
-                                } else {
-                                  updateSet(exercise.key, i, {
-                                    done: !set.done,
-                                  });
-                                }
-                              }}
-                            >
-                              <Check className="size-4" />
-                            </Button>
-                          </div>
-                        );
-                      })}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-1 text-muted-foreground"
-                        onClick={() =>
-                          setExercises((prev) =>
-                            prev.map((e) =>
-                              e.key === exercise.key
-                                ? {
-                                    ...e,
-                                    sets: [
-                                      ...e.sets,
-                                      { ...e.sets[e.sets.length - 1], done: false },
-                                    ],
-                                  }
-                                : e,
-                            ),
-                          )
-                        }
-                      >
-                        <Plus className="size-4" /> {t.logger.addSet}
-                      </Button>
-                    </div>
-                  </motion.div>
-                );
-              })}
+              {exercises.map((exercise) => (
+                <LoggedExerciseCard
+                  key={exercise.key}
+                  exercise={exercise}
+                  hint={hints[exercise.name]}
+                  onRemove={() => removeExercise(exercise.key)}
+                  onUpdateSet={(index, patch) =>
+                    updateSet(exercise.key, index, patch)
+                  }
+                  onAddSet={() => addSet(exercise.key)}
+                />
+              ))}
             </AnimatePresence>
 
             <Button
@@ -448,88 +263,22 @@ export function WorkoutLogger({
       )}
 
       {started && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="sticky bottom-20 z-30 md:bottom-4"
-        >
-          <Card className="border-primary/20 shadow-lg">
-            <CardContent className="flex items-center justify-between gap-3 p-3">
-              <div className="flex items-center gap-4 pl-1 text-sm">
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    {t.logger.volume}
-                  </div>
-                  <div className="font-semibold tabular-nums">
-                    {formatVolume(totalVolume)}
-                  </div>
-                </div>
-                <Separator orientation="vertical" className="h-8" />
-                <div>
-                  <div className="text-xs text-muted-foreground">
-                    {t.logger.sets}
-                  </div>
-                  <div className="font-semibold tabular-nums">{completedSets}</div>
-                </div>
-              </div>
-              <Button
-                size="lg"
-                onClick={finishWorkout}
-                disabled={saving || completedSets === 0}
-              >
-                <CheckCheck className="size-4" />
-                {saving ? t.logger.saving : t.logger.finishWorkout}
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
+        <WorkoutSummaryBar
+          totalVolume={totalVolume}
+          completedSets={completedSets}
+          saving={saving}
+          onFinish={finishWorkout}
+        />
       )}
 
-      <CommandDialog
+      <ExercisePickerDialog
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        title={t.logger.pickerTitle}
-        description={t.logger.pickerDesc}
-      >
-        <Command>
-          <CommandInput
-            placeholder={t.logger.searchPlaceholder}
-            value={query}
-            onValueChange={setQuery}
-          />
-          <CommandList>
-          <CommandEmpty>{t.logger.noExerciseFound}</CommandEmpty>
-          {query.trim().length > 1 &&
-            !library.some(
-              (e) => e.name.toLowerCase() === query.trim().toLowerCase(),
-            ) && (
-              <CommandGroup heading={t.logger.createGroup}>
-                <CommandItem
-                  value={`create-${query}`}
-                  onSelect={() => addExercise(query.trim())}
-                >
-                  <Plus className="size-4" />
-                  {fmt(t.logger.addAsNew, { name: query.trim() })}
-                </CommandItem>
-              </CommandGroup>
-            )}
-          <CommandGroup heading={t.logger.libraryGroup}>
-            {library.map((exercise) => (
-              <CommandItem
-                key={exercise.name}
-                value={exercise.name}
-                onSelect={() => addExercise(exercise.name)}
-              >
-                <span className="truncate">{exercise.name}</span>
-                <span className="ml-auto text-xs capitalize text-muted-foreground">
-                  {exercise.bodyPart}
-                </span>
-              </CommandItem>
-            ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </CommandDialog>
+        library={library}
+        query={query}
+        onQueryChange={setQuery}
+        onSelect={addExercise}
+      />
     </div>
   );
 }
