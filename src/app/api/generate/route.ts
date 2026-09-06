@@ -19,7 +19,15 @@ const planSchema = z.object({
         name: z.string().describe('Day label, e.g. "Push Day"'),
         exercises: z.array(
           z.object({
-            name: z.string().describe("Common gym name of the exercise"),
+            name: z
+              .string()
+              .regex(/^(?!.*\/)(?!.*\b[oO][rR]\b).+$/, {
+                message:
+                  'Exactly one exercise — no alternates like "X or Y" or "X/Y". Put a substitute in notes instead.',
+              })
+              .describe(
+                'Common gym name of exactly one exercise — never two alternatives joined by "or" or "/"',
+              ),
             sets: z.number().int().describe("Number of working sets"),
             reps: z
               .string()
