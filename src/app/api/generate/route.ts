@@ -4,6 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { getUser } from "@/lib/auth";
 import { buildDemoPlan } from "@/lib/demo-plan";
+import { CURRENT_GENERATE_PLAN_PROMPT } from "@/lib/generate-plan-prompts";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,15 @@ const planSchema = z.object({
         name: z.string().describe('Day label, e.g. "Push Day"'),
         exercises: z.array(
           z.object({
-            name: z.string().describe("Common gym name of the exercise"),
+            name: z
+              .string()
+              .regex(/^(?!.*\/)(?!.*\b[oO][rR]\b).+$/, {
+                message:
+                  'Exactly one exercise — no alternates like "X or Y" or "X/Y". Put a substitute in notes instead.',
+              })
+              .describe(
+                'Common gym name of exactly one exercise — never two alternatives joined by "or" or "/"',
+              ),
             sets: z.number().int().describe("Number of working sets"),
             reps: z
               .string()
@@ -34,20 +43,11 @@ const planSchema = z.object({
         ),
       }),
     )
-    .describe("One entry per training day per week"),
+    .length(1)
+    .describe("Exactly one entry — a single workout session, not a weekly split"),
 });
 
-const SYSTEM_PROMPT = `You are an experienced strength and conditioning coach.
-Design a weekly gym plan from the user's request.
-
-Rules:
-- Respect every constraint the user states (days per week, equipment, time, experience, injuries, goals).
-- Pick proven compound movements first, then accessories. Use common exercise names.
-- Keep each day realistic: 4-7 exercises for a typical session, fewer if the user is time-constrained.
-- Program for progressive overload: include a concrete progression tip in the plan description.
-- Reps must always be digits: a count like "10" or a range like "8-12". For timed holds give an
-  equivalent rep count and put the duration in the notes instead — never write "30-60s" or "AMRAP".
-- If the user writes in another language, answer exercise names in English but the plan name, description, day names and notes in their language.`;
+const SYSTEM_PROMPT = CURRENT_GENERATE_PLAN_PROMPT;
 
 export async function POST(req: Request) {
   const user = await getUser();
