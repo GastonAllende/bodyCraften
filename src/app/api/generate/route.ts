@@ -43,8 +43,7 @@ const planSchema = z.object({
         ),
       }),
     )
-    .length(1)
-    .describe("Exactly one entry — a single workout session, not a weekly split"),
+    .describe("One entry per training day per week"),
 });
 
 const SYSTEM_PROMPT = CURRENT_GENERATE_PLAN_PROMPT;
