@@ -44,15 +44,12 @@ Supabase connection.
   used by the app at runtime), `DIRECT_URL` (direct, port 5432, used only by drizzle-kit).
   `ANTHROPIC_API_KEY` (real AI generation, demo plans otherwise) and `WORKOUTX_API_KEY`
   (`scripts/sync-exercises.py` only) stay optional.
-- The database is Supabase Postgres — no local file, no `data/` directory anymore. Schema changes
-  go through drizzle-kit migrations (`npm run db:generate` then `npm run db:migrate`, both source
-  `.env.local` via `dotenv-cli`), not an implicit bootstrap-on-boot. The built-in exercise catalog
-  is seeded once via `npm run db:seed` (`scripts/seed-exercises.ts`), not on every app start.
-  `resetWorkoutHistory()` in the UI is narrower still: it clears the signed-in user's logged
-  sessions only.
+- The database is Supabase Postgres — no local file, no `data/` directory anymore. Schema/migration
+  workflow is covered in Gotchas below; `resetWorkoutHistory()` in the UI is narrower than either —
+  it clears the signed-in user's logged sessions only.
 - Row Level Security is enabled on every table (`supabase/rls.sql`, run once via the Supabase SQL
-  editor) as **defense-in-depth only** — see the RLS note in Architecture below before assuming it
-  does anything for the app's normal read/write path.
+  editor) as **defense-in-depth only** — see the RLS note in Auth below before assuming it does
+  anything for the app's normal read/write path.
 
 ## Architecture
 
@@ -69,8 +66,9 @@ The data flow is the thing to internalize:
   promise-based — `await` every call, there is no more `.all()`/`.run()`).
 - **Writes** live in `src/lib/actions.ts` (`"use server"`). Every mutation calls `getUser()`
   itself first (see Auth below), threads the resulting `userId` through every insert/update/
-  delete, calls `revalidatePath("/", "layout")`, and returns `ActionResult<T>`
-  (`{ ok: true, data }` | `{ ok: false, error }`) — callers branch on `.ok`, nothing throws.
+  delete, calls the local `revalidateApp()` helper (wraps `revalidatePath("/", "layout")`), and
+  returns `ActionResult<T>` (`{ ok: true, data }` | `{ ok: false, error }`) — callers branch on
+  `.ok`, nothing throws.
 - Pages call `requireUserId()` (`src/lib/auth.ts`) first, then fetch and pass plain data down to
   `"use client"` components in `src/components/<feature>/`, which call actions and surface
   results via `sonner` toasts. DB-backed pages set `export const dynamic = "force-dynamic"`.
@@ -172,31 +170,17 @@ Cross-boundary DTOs live in `src/lib/types.ts`; Drizzle row types in `src/db/sch
 
 ## If you touch X, also touch Y
 
-Each of these is an invariant nothing enforces at build time — the compiler stays quiet and
-the app breaks at runtime (or silently) instead.
+Invariants nothing enforces at build time — the compiler stays quiet and the app breaks at
+runtime (or silently) instead. Full rationale for each is in Architecture/Auth/Gotchas above;
+this is the fast-scan checklist, plus the bits not said elsewhere (marked *new*).
 
-- **Add or change a DB column** → `src/db/schema.ts`, then `npm run db:generate` **and**
-  `npm run db:migrate` (both source `.env.local`). If the column carries per-row ownership,
-  decide whether it belongs on a top-level table (gets its own `user_id`) or a child table
-  (scoped through its parent instead — see the Auth section).
-- **Add a user-visible string** → `en` first in `src/lib/i18n/dictionaries.ts`, then `es`
-  (`Dictionary = typeof en`, so the compiler catches the missing `es` key, not the reverse).
-  Use `{name}` placeholders + `fmt()`, never string concatenation.
-- **Add a server action** → `"use server"`, call `getUser()`/`requireUser()`-style check as the
-  *first line* (independent of `src/proxy.ts`), return `ActionResult<T>` (never throw), call
-  `revalidateApp()` before returning ok, take error text from `t.actions.*` — not a hardcoded
-  English literal — and make sure every `UPDATE`/`DELETE` by id is scoped `AND user_id = userId`,
-  treating zero rows affected as a not-found error rather than a silent success.
-- **Add a page that reads the DB** → `export const dynamic = "force-dynamic"`, call
-  `requireUserId()` first, fetch in the server component, pass plain serializable data to the
-  client component.
-- **Add a query** → `src/lib/queries.ts`, `async`, `userId: string` as the first parameter, and a
-  `user_id` filter on every top-level-table `SELECT` (child tables: resolve the owned parent ids
-  first, then filter by them). Never import it, `@/db`, or `exercise-catalog.ts` from a
-  `"use client"` file.
-- **Store an exercise name** → run it through `findCanonical()` so the DB keeps the English
-  name; localized labels only ever ride along in `displayName`.
-- **Add a numeric input** → a `sanitize*` helper on change **and** an `is*` predicate at
-  submit, then re-check the same predicate inside the action.
-- **Add an animation** → build it from `src/components/motion.tsx`, or honor
-  `useReducedMotion()` yourself.
+| Change | Also do |
+| --- | --- |
+| DB column | `schema.ts` → `db:generate` **and** `db:migrate`. Top-level table gets its own `user_id`; child table is scoped through its parent instead. |
+| Server action | `"use server"`, `getUser()` as the first line, `ActionResult<T>`, `revalidateApp()` on success, error text from `t.actions.*`. *New:* every `UPDATE`/`DELETE` by id scoped `AND user_id = userId`, with zero rows affected treated as not-found, not silent success. |
+| Query | `queries.ts`, async, `userId` first param, `user_id` filter on every top-level `SELECT` (child tables: resolve parent ids first). Never import from a `"use client"` file. |
+| Page reading the DB | `export const dynamic = "force-dynamic"`, `requireUserId()` first, fetch server-side, pass plain data to the client component. |
+| User-visible string | `en` first in `dictionaries.ts`, then `es`. `{name}` + `fmt()`, never concatenation. |
+| Exercise name | Through `findCanonical()` — DB keeps the English name, `displayName` carries the localized one. |
+| Numeric input | `sanitize*` on change **and** `is*` predicate at submit, re-checked inside the action. |
+| Animation | Build from `src/components/motion.tsx`, or honor `useReducedMotion()` yourself. |
