@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/components/i18n-provider";
 import { useImagePicker, type ImagePickerAction } from "@/hooks/use-image-picker";
-import { ALLOWED_IMAGE_TYPES } from "@/lib/uploads";
+import { ALLOWED_IMAGE_TYPES } from "@/lib/storage";
 import type { LibraryExercise } from "@/lib/types";
 
 export type ExerciseDraft = {

@@ -14,7 +14,7 @@ import {
   removeExercise,
   updateExercise,
 } from "@/lib/actions";
-import { EXERCISE_IMAGES_BUCKET } from "@/lib/exercise-images";
+import { EXERCISE_IMAGES_BUCKET } from "@/lib/storage";
 import { fmt } from "@/lib/i18n/config";
 import { createClient } from "@/lib/supabase/client";
 import type { LibraryExercise } from "@/lib/types";

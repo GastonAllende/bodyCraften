@@ -4,10 +4,7 @@ import { redirect } from "next/navigation";
 import { getSiteUrl } from "@/lib/auth";
 import { getDictionary } from "@/lib/i18n/server";
 import { createClient } from "@/lib/supabase/server";
-
-type ActionResult<T = undefined> =
-  | ({ ok: true } & (T extends undefined ? { data?: undefined } : { data: T }))
-  | { ok: false; error: string };
+import type { ActionResult } from "@/lib/actions/_shared";
 
 export async function signUp(input: {
   email: string;
