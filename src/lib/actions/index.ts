@@ -9,6 +9,7 @@
 export * from "./body";
 export * from "./exercises";
 export * from "./plans";
+export * from "./profile";
 export * from "./schedule";
 export * from "./settings";
 export * from "./workouts";
