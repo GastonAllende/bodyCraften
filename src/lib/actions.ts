@@ -10,6 +10,7 @@ import {
   planDays,
   planExercises,
   plans,
+  profiles,
   scheduleEntries,
   workouts,
   workoutSets,
@@ -22,7 +23,13 @@ import { fmt, isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/server";
 import { estimateOneRepMax } from "@/lib/overload";
 import { createClient } from "@/lib/supabase/server";
-import { isPositiveDecimal, isValidRepRange } from "@/lib/validation";
+import {
+  isGender,
+  isPositiveDecimal,
+  isValidBirthDate,
+  isValidName,
+  isValidRepRange,
+} from "@/lib/validation";
 import type {
   BodyEntryInput,
   BodyEntryUpdateInput,
@@ -31,6 +38,7 @@ import type {
   PlanExerciseInput,
   PlanInput,
   PlanUpdateInput,
+  ProfileInput,
   WorkoutPayload,
 } from "@/lib/types";
 
@@ -196,6 +204,64 @@ export async function deleteWorkout(id: number): Promise<ActionResult> {
  * workouts via cascade. Plans, the calendar and the exercise library are left
  * alone — this is a history reset, not a factory reset.
  */
+/**
+ * Writes the signed-in user's profile, creating the row on first save. Every
+ * field is optional: an empty string clears the column to NULL rather than
+ * storing "", so "unset" has exactly one representation in the database.
+ *
+ * The predicates re-run here even though the form already gated on them \u2014 a
+ * server action is a public endpoint, and the client checks are a convenience,
+ * not a boundary.
+ */
+export async function updateProfile(
+  input: ProfileInput,
+): Promise<ActionResult> {
+  const { user, error } = await requireUser();
+  if (!user) return { ok: false, error };
+  const db = getDb();
+  const t = await getDictionary();
+
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const displayName = input.displayName.trim();
+  const birthDate = input.birthDate.trim();
+  const gender = input.gender.trim();
+
+  if (
+    !isValidName(firstName) ||
+    !isValidName(lastName) ||
+    !isValidName(displayName)
+  ) {
+    return { ok: false, error: t.actions.nameTooLong };
+  }
+  if (!isValidBirthDate(birthDate)) {
+    return { ok: false, error: t.actions.invalidBirthDate };
+  }
+  if (gender !== "" && !isGender(gender)) {
+    return { ok: false, error: t.actions.invalidGender };
+  }
+
+  const now = new Date().toISOString();
+  const values = {
+    firstName: firstName || null,
+    lastName: lastName || null,
+    displayName: displayName || null,
+    birthDate: birthDate || null,
+    gender: gender || null,
+    updatedAt: now,
+  };
+
+  // One statement, so a first save and an edit take the same path and two
+  // concurrent saves can't race into a duplicate-key error.
+  await db
+    .insert(profiles)
+    .values({ userId: user.id, createdAt: now, ...values })
+    .onConflictDoUpdate({ target: profiles.userId, set: values });
+
+  revalidateApp();
+  return { ok: true };
+}
+
 export async function resetWorkoutHistory(): Promise<
   ActionResult<{ deleted: number }>
 > {

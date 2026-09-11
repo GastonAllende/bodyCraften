@@ -1,8 +1,4 @@
 {
-  "enabledPlugins": {
-    "supabase@claude-plugins-official": false,
-    "andrej-karpathy-skills@karpathy-skills": true
-  },
   "hooks": {
     "PreToolUse": [
       {
@@ -16,5 +12,10 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "supabase@claude-plugins-official": false,
+    "andrej-karpathy-skills@karpathy-skills": true,
+    "vercel@claude-plugins-official": true
   }
 }

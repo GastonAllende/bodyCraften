@@ -179,6 +179,29 @@ export const bodyMeasurements = pgTable(
   ],
 );
 
+/**
+ * Per-user profile details. One row per user, so `user_id` *is* the primary
+ * key — there is no separate identity column and no way to end up with two
+ * profiles for one account. The row is created lazily on first save, so a
+ * missing row is a valid "nothing filled in yet" state, not an error.
+ *
+ * Email deliberately lives only in `auth.users` — Supabase owns it, changing
+ * it requires a verification round-trip, and copying it here would create a
+ * second copy that silently goes stale.
+ */
+export const profiles = pgTable("profiles", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => authUsers.id, { onDelete: "cascade" }),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  displayName: text("display_name"),
+  birthDate: text("birth_date"), // yyyy-MM-dd, same as every other date here
+  gender: text("gender"), // female | male | other | prefer_not_to_say
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
 export type Exercise = typeof exercises.$inferSelect;
 export type Workout = typeof workouts.$inferSelect;
 export type WorkoutSet = typeof workoutSets.$inferSelect;
@@ -187,3 +210,4 @@ export type PlanDay = typeof planDays.$inferSelect;
 export type PlanExercise = typeof planExercises.$inferSelect;
 export type ScheduleEntry = typeof scheduleEntries.$inferSelect;
 export type BodyMeasurement = typeof bodyMeasurements.$inferSelect;
+export type Profile = typeof profiles.$inferSelect;

@@ -8,6 +8,7 @@ import {
   planDays,
   planExercises,
   plans,
+  profiles,
   scheduleEntries,
   workouts,
   workoutSets,
@@ -37,6 +38,7 @@ import type {
   LibraryExercise,
   PlanWithDays,
   ScheduledDayPrefill,
+  ProfileView,
   ScheduleEntryView,
   WorkoutWithSets,
 } from "@/lib/types";
@@ -315,6 +317,34 @@ export async function getWorkoutHistory(
 }
 
 /** How much logged data a history reset would remove. */
+/**
+ * The signed-in user's profile. The row is created lazily on first save, so a
+ * missing row is the normal "nothing filled in yet" state and comes back as
+ * empty strings rather than null \u2014 the form binds to strings, and this
+ * keeps every input controlled from the first render.
+ *
+ * `email` is not stored here; the caller passes it in from the verified JWT.
+ */
+export async function getProfile(
+  userId: string,
+  email: string | null,
+): Promise<ProfileView> {
+  const db = getDb();
+  const [row] = await db
+    .select()
+    .from(profiles)
+    .where(eq(profiles.userId, userId));
+
+  return {
+    email,
+    firstName: row?.firstName ?? "",
+    lastName: row?.lastName ?? "",
+    displayName: row?.displayName ?? "",
+    birthDate: row?.birthDate ?? "",
+    gender: row?.gender ?? "",
+  };
+}
+
 export async function getHistorySize(
   userId: string,
 ): Promise<{ workouts: number; sets: number }> {

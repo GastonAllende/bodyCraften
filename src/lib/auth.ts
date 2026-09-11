@@ -15,7 +15,15 @@ import { createClient } from "@/lib/supabase/server";
 export async function getUser() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
-  return data?.claims ? { id: data.claims.sub } : null;
+  if (!data?.claims) return null;
+  // `email` rides along in the verified JWT, so reading it here costs nothing
+  // extra. It can be absent for non-password identities — callers treat it as
+  // optional rather than assuming every session has one.
+  const email = data.claims.email;
+  return {
+    id: data.claims.sub as string,
+    email: typeof email === "string" ? email : null,
+  };
 }
 
 /** For pages that require a session. Redirects rather than erroring. */

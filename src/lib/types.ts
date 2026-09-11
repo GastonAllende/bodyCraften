@@ -184,3 +184,27 @@ export type DashboardData = {
   trackedExercises: string[];
   progressByExercise: Record<string, ExerciseProgressPoint[]>;
 };
+
+/**
+ * What the profile card renders. `email` comes from `auth.users` via the
+ * verified JWT rather than from the profiles row, so it is always the live
+ * value \u2014 and it is read-only here, since changing it needs a Supabase
+ * verification round-trip rather than a column write.
+ */
+export type ProfileView = {
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  birthDate: string;
+  gender: string;
+};
+
+/** Edit payload. Emptiness means "unset": "" clears the column to NULL. */
+export type ProfileInput = {
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  birthDate: string;
+  gender: string;
+};

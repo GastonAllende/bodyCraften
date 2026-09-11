@@ -92,3 +92,22 @@ create policy "exercises_update_own" on exercises
 create policy "exercises_delete_own" on exercises
   for delete to authenticated
   using (user_id = (select auth.uid()));
+
+-- One profile row per user, keyed by the user's own id.
+alter table profiles enable row level security;
+
+create policy "profiles_read_own" on profiles
+  for select to authenticated
+  using (user_id = (select auth.uid()));
+
+create policy "profiles_insert_own" on profiles
+  for insert to authenticated
+  with check (user_id = (select auth.uid()));
+
+create policy "profiles_update_own" on profiles
+  for update to authenticated
+  using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+
+create policy "profiles_delete_own" on profiles
+  for delete to authenticated
+  using (user_id = (select auth.uid()));

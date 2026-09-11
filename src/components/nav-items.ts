@@ -6,6 +6,7 @@ import {
   Ruler,
   Settings,
   Sparkles,
+  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -23,6 +24,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/plans", labelKey: "plans", icon: CalendarRange },
   { href: "/exercises", labelKey: "exercises", icon: Dumbbell },
   { href: "/generate", labelKey: "generate", icon: Sparkles },
+  { href: "/profile", labelKey: "profile", icon: UserRound },
   { href: "/settings", labelKey: "settings", icon: Settings },
 ];
 
