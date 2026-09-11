@@ -12,7 +12,7 @@ grepping the whole tree — paths are relative to `node_modules/next/dist/docs/`
 
 | Touching | Read |
 | --- | --- |
-| a server action in `actions.ts` | `01-app/01-getting-started/07-mutating-data.md` |
+| a server action in `src/lib/actions/` | `01-app/01-getting-started/07-mutating-data.md` |
 | `POST /api/generate` | `01-app/01-getting-started/15-route-handlers.md` |
 | `export const dynamic` on a page | `01-app/02-guides/caching-without-cache-components.md` |
 | the locale cookie | `01-app/03-api-reference/04-functions/cookies.md` |
@@ -44,15 +44,12 @@ Supabase connection.
   used by the app at runtime), `DIRECT_URL` (direct, port 5432, used only by drizzle-kit).
   `ANTHROPIC_API_KEY` (real AI generation, demo plans otherwise) and `WORKOUTX_API_KEY`
   (`scripts/sync-exercises.py` only) stay optional.
-- The database is Supabase Postgres — no local file, no `data/` directory anymore. Schema changes
-  go through drizzle-kit migrations (`npm run db:generate` then `npm run db:migrate`, both source
-  `.env.local` via `dotenv-cli`), not an implicit bootstrap-on-boot. The built-in exercise catalog
-  is seeded once via `npm run db:seed` (`scripts/seed-exercises.ts`), not on every app start.
-  `resetWorkoutHistory()` in the UI is narrower still: it clears the signed-in user's logged
-  sessions only.
+- The database is Supabase Postgres — no local file, no `data/` directory anymore. Schema/migration
+  workflow is covered in Gotchas below; `resetWorkoutHistory()` in the UI is narrower than either —
+  it clears the signed-in user's logged sessions only.
 - Row Level Security is enabled on every table (`supabase/rls.sql`, run once via the Supabase SQL
-  editor) as **defense-in-depth only** — see the RLS note in Architecture below before assuming it
-  does anything for the app's normal read/write path.
+  editor) as **defense-in-depth only** — see the RLS note in Auth below before assuming it does
+  anything for the app's normal read/write path.
 
 ## Architecture
 
@@ -67,10 +64,17 @@ The data flow is the thing to internalize:
 - **Reads** live in `src/lib/queries.ts` (`server-only`). Server components call them directly.
   Every function takes `userId` as its first argument and is **async** (postgres-js/Drizzle is
   promise-based — `await` every call, there is no more `.all()`/`.run()`).
-- **Writes** live in `src/lib/actions.ts` (`"use server"`). Every mutation calls `getUser()`
-  itself first (see Auth below), threads the resulting `userId` through every insert/update/
-  delete, calls `revalidatePath("/", "layout")`, and returns `ActionResult<T>`
-  (`{ ok: true, data }` | `{ ok: false, error }`) — callers branch on `.ok`, nothing throws.
+- **Writes** live in `src/lib/actions/` — one `"use server"` module per feature (`workouts.ts`,
+  `plans.ts`, `schedule.ts`, `exercises.ts`, `body.ts`, `settings.ts`) behind an `index.ts`
+  barrel, so call sites keep importing from `@/lib/actions`. `_shared.ts` holds the pieces they
+  all use — `ActionResult<T>`, `revalidateApp()`, and the `requireUser()` guard — and is the one
+  module in that directory **without** `"use server"` (it declares no actions, only a type and
+  helpers, so it carries `server-only` instead). Add a new feature module rather than growing an
+  existing one; never re-export `_shared` through the barrel, or its helpers become public
+  endpoints. Every mutation calls `requireUser()` as its first line (see Auth below), threads the
+  resulting `userId` through every insert/update/delete, calls `revalidateApp()`, and returns
+  `ActionResult<T>` (`{ ok: true, data }` | `{ ok: false, error }`) — callers branch on `.ok`,
+  nothing throws.
 - Pages call `requireUserId()` (`src/lib/auth.ts`) first, then fetch and pass plain data down to
   `"use client"` components in `src/components/<feature>/`, which call actions and surface
   results via `sonner` toasts. DB-backed pages set `export const dynamic = "force-dynamic"`.
@@ -84,7 +88,8 @@ The data flow is the thing to internalize:
   `getSession()`, which trusts a possibly-stale cookie) and `requireUserId()` (redirect-to-sign-in
   variant, for pages). **`src/lib/auth-actions.ts`** — `signUp`/`signInWithPassword`/
   `requestPasswordReset`/`updatePassword`/`signOut`, same `ActionResult<T>` convention as
-  `actions.ts`.
+  `src/lib/actions/` — it imports the type from `@/lib/actions/_shared` rather than redeclaring
+  it, and is the only file outside that directory allowed to reach into `_shared`.
 - **`src/proxy.ts`** refreshes the Supabase session cookie and redirects unauthenticated visitors
   to `/sign-in`. This is a convenience layer, **not** the security boundary — a matcher change
   here can silently stop covering a route, so every Server Action independently calls `getUser()`
@@ -92,7 +97,7 @@ The data flow is the thing to internalize:
   proxy already handles it."
 - **RLS is enabled on every table but is defense-in-depth, not enforcement.** A direct Drizzle
   connection over `DATABASE_URL` never goes through PostgREST, so `auth.uid()` is `NULL` in that
-  path and RLS policies (`supabase/rls.sql`) have no effect on `queries.ts`/`actions.ts`. The
+  path and RLS policies (`supabase/rls.sql`) have no effect on `queries.ts`/`actions/`. The
   `user_id` filtering in those two files is the actual boundary — if you drop a filter there, RLS
   will not save you.
 - Every top-level table has a `user_id uuid references auth.users(id)`; child tables
@@ -172,31 +177,18 @@ Cross-boundary DTOs live in `src/lib/types.ts`; Drizzle row types in `src/db/sch
 
 ## If you touch X, also touch Y
 
-Each of these is an invariant nothing enforces at build time — the compiler stays quiet and
-the app breaks at runtime (or silently) instead.
+Invariants nothing enforces at build time — the compiler stays quiet and the app breaks at
+runtime (or silently) instead. Full rationale for each is in Architecture/Auth/Gotchas above;
+this is the fast-scan checklist, plus the bits not said elsewhere (marked *new*).
 
-- **Add or change a DB column** → `src/db/schema.ts`, then `npm run db:generate` **and**
-  `npm run db:migrate` (both source `.env.local`). If the column carries per-row ownership,
-  decide whether it belongs on a top-level table (gets its own `user_id`) or a child table
-  (scoped through its parent instead — see the Auth section).
-- **Add a user-visible string** → `en` first in `src/lib/i18n/dictionaries.ts`, then `es`
-  (`Dictionary = typeof en`, so the compiler catches the missing `es` key, not the reverse).
-  Use `{name}` placeholders + `fmt()`, never string concatenation.
-- **Add a server action** → `"use server"`, call `getUser()`/`requireUser()`-style check as the
-  *first line* (independent of `src/proxy.ts`), return `ActionResult<T>` (never throw), call
-  `revalidateApp()` before returning ok, take error text from `t.actions.*` — not a hardcoded
-  English literal — and make sure every `UPDATE`/`DELETE` by id is scoped `AND user_id = userId`,
-  treating zero rows affected as a not-found error rather than a silent success.
-- **Add a page that reads the DB** → `export const dynamic = "force-dynamic"`, call
-  `requireUserId()` first, fetch in the server component, pass plain serializable data to the
-  client component.
-- **Add a query** → `src/lib/queries.ts`, `async`, `userId: string` as the first parameter, and a
-  `user_id` filter on every top-level-table `SELECT` (child tables: resolve the owned parent ids
-  first, then filter by them). Never import it, `@/db`, or `exercise-catalog.ts` from a
-  `"use client"` file.
-- **Store an exercise name** → run it through `findCanonical()` so the DB keeps the English
-  name; localized labels only ever ride along in `displayName`.
-- **Add a numeric input** → a `sanitize*` helper on change **and** an `is*` predicate at
-  submit, then re-check the same predicate inside the action.
-- **Add an animation** → build it from `src/components/motion.tsx`, or honor
-  `useReducedMotion()` yourself.
+| Change | Also do |
+| --- | --- |
+| DB column | `schema.ts` → `db:generate` **and** `db:migrate`. Top-level table gets its own `user_id`; child table is scoped through its parent instead. |
+| Server action | Goes in the matching `src/lib/actions/<feature>.ts` (new feature = new module + one line in `index.ts`, never a grep-and-append to an existing one). `"use server"` at the top, `requireUser()` as the first line, `ActionResult<T>`, `revalidateApp()` on success, error text from `t.actions.*` — all four from `./_shared`. *New:* every `UPDATE`/`DELETE` by id scoped `AND user_id = userId`, with zero rows affected treated as not-found, not silent success. |
+| Query | `queries.ts`, async, `userId` first param, `user_id` filter on every top-level `SELECT` (child tables: resolve parent ids first). Never import from a `"use client"` file. |
+| Page reading the DB | `export const dynamic = "force-dynamic"`, `requireUserId()` first, fetch server-side, pass plain data to the client component. |
+| User-visible string | `en` first in `dictionaries.ts`, then `es`. `{name}` + `fmt()`, never concatenation. |
+| Exercise name | Through `findCanonical()` — DB keeps the English name, `displayName` carries the localized one. |
+| Numeric input | `sanitize*` on change **and** `is*` predicate at submit, re-checked inside the action. |
+| Animation | Build from `src/components/motion.tsx`, or honor `useReducedMotion()` yourself. |
+| Storage bucket or upload limit | *New:* `src/lib/storage.ts` — bucket names and image MIME/size limits live there together, imported by both server and client (plain constants, no `server-only`). Don't add a new one-constant module beside it. |

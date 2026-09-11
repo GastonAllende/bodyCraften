@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/components/i18n-provider";
 import { useImagePicker, type ImagePickerAction } from "@/hooks/use-image-picker";
 import { todayIso } from "@/lib/overload";
-import { ALLOWED_IMAGE_TYPES } from "@/lib/uploads";
+import { ALLOWED_IMAGE_TYPES } from "@/lib/storage";
 import { isPositiveDecimal, sanitizeDecimal } from "@/lib/validation";
 import type { BodyEntryWithPhoto } from "@/lib/types";
 

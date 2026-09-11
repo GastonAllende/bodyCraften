@@ -28,8 +28,7 @@ import {
   weekStart,
 } from "@/lib/overload";
 import { createClient } from "@/lib/supabase/server";
-import { BODY_PHOTOS_BUCKET } from "@/lib/body-photos";
-import { EXERCISE_IMAGES_BUCKET } from "@/lib/exercise-images";
+import { BODY_PHOTOS_BUCKET, EXERCISE_IMAGES_BUCKET } from "@/lib/storage";
 import type {
   BodyEntryWithPhoto,
   DashboardData,

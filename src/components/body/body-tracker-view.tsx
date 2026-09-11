@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/components/i18n-provider";
 import { addBodyEntry, updateBodyEntry } from "@/lib/actions";
-import { BODY_PHOTOS_BUCKET } from "@/lib/body-photos";
+import { BODY_PHOTOS_BUCKET } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/client";
 import { isPositiveDecimal } from "@/lib/validation";
 import type { BodyEntryWithPhoto } from "@/lib/types";
