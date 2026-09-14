@@ -35,13 +35,32 @@ export function buildDemoPlan(
       ? (e: LibraryExerciseChoice) => /dumbbell|body ?weight/.test(e.equipment)
       : null;
   const preferred = equipmentMatch ? library.filter(equipmentMatch) : library;
-  const pool = preferred.length >= 3 ? preferred : library;
+  const rawPool = preferred.length >= 3 ? preferred : library;
+  // Normalise bodyPart/target to lowercase so bucket keys ("legs", "calves")
+  // and target regexes ("/tricep/") match regardless of the case a custom-row
+  // user happened to type. Catalog rows are already lowercased at the source;
+  // custom rows are only trimmed, so "Legs"/"Calves" would otherwise silently
+  // miss. Done once, on fresh copies (never mutating the caller's array), so
+  // every downstream match is case-insensitive.
+  const pool = rawPool.map((e) => ({
+    ...e,
+    bodyPart: e.bodyPart.toLowerCase(),
+    target: e.target.toLowerCase(),
+  }));
 
   const byBucket = new Map<string, LibraryExerciseChoice[]>();
   for (const exercise of pool) {
     const bucket = byBucket.get(exercise.bodyPart) ?? [];
     bucket.push(exercise);
     byBucket.set(exercise.bodyPart, bucket);
+    // Seeded calf raises use bodyPart "legs" + target "calves"; the vendored
+    // catalog buckets them as bodyPart "calves". Index the seed shape under
+    // "calves" too so the leg-day slot resolves against either library.
+    if (isCalfRaise(exercise)) {
+      const calves = byBucket.get("calves") ?? [];
+      calves.push(exercise);
+      byBucket.set("calves", calves);
+    }
   }
 
   // Each template is a day's slots in priority order: a body part, plus an
@@ -88,6 +107,19 @@ export function buildDemoPlan(
 /** One slot of a day: a body part, optionally narrowed to matching targets. */
 type Slot = [bodyPart: string, target?: RegExp];
 
+/**
+ * Whether an exercise is a calf raise under the seed's shape (bodyPart "legs" +
+ * target "calves") as opposed to the vendored catalog (bodyPart "calves").
+ * bodyPart/target are already lowercased by buildDemoPlan, but casing is
+ * normalised here too so the rule is correct even if this is ever fed raw data.
+ */
+function isCalfRaise(exercise: LibraryExerciseChoice): boolean {
+  return (
+    exercise.bodyPart.toLowerCase() === "legs" &&
+    /calves/.test(exercise.target.toLowerCase())
+  );
+}
+
 /** A day is never padded below this from off-template buckets. */
 const MIN_EXERCISES_PER_DAY = 3;
 
@@ -125,10 +157,15 @@ function pickDay(
     used.add(exercise.name);
   }
   // Rotate each bucket so the next day starts one exercise further along.
+  // Seeded calves are indexed under both "legs" and "calves" — rotate both.
   for (const exercise of picked) {
-    const bucket = byBucket.get(exercise.bodyPart);
-    if (bucket && bucket.length > 1) {
-      bucket.push(...bucket.splice(bucket.indexOf(exercise), 1));
+    const keys = new Set([exercise.bodyPart]);
+    if (isCalfRaise(exercise)) keys.add("calves");
+    for (const key of keys) {
+      const bucket = byBucket.get(key);
+      if (!bucket || bucket.length <= 1) continue;
+      const i = bucket.indexOf(exercise);
+      if (i >= 0) bucket.push(...bucket.splice(i, 1));
     }
   }
   return picked;
