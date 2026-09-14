@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
-import { Info, RotateCcw, Save, Sparkles, Timer } from "lucide-react";
+import { Dumbbell, Info, RotateCcw, Save, Sparkles, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -20,19 +21,33 @@ import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/components/i18n-provider";
 import { createPlan } from "@/lib/actions";
 import { fmt } from "@/lib/i18n/config";
-import type { GeneratedPlan } from "@/lib/types";
+import {
+  EMPTY_LIBRARY_CODE,
+  type GeneratePlanResponse,
+  type GeneratedPlan,
+} from "@/lib/types";
 
 type GenState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "result"; plan: GeneratedPlan; isDemo: boolean };
 
-export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
+export function PlanGenerator({
+  aiEnabled,
+  hasLibrary,
+}: {
+  aiEnabled: boolean;
+  /** False when the user's exercise library is empty — nothing to build from. */
+  hasLibrary: boolean;
+}) {
   const router = useRouter();
   const { t } = useI18n();
   const [prompt, setPrompt] = useState("");
   const [gen, setGen] = useState<GenState>({ status: "idle" });
   const [saving, startSaving] = useTransition();
+  // Starts from the server's answer, but the route can also report an empty
+  // library mid-session (another tab removed the last exercise).
+  const [libraryEmpty, setLibraryEmpty] = useState(!hasLibrary);
 
   async function generate() {
     if (prompt.trim().length < 8) {
@@ -46,13 +61,10 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-      const data = (await res.json()) as {
-        plan?: GeneratedPlan;
-        demo?: boolean;
-        error?: string;
-      };
+      const data = (await res.json()) as GeneratePlanResponse;
       if (!res.ok || !data.plan) {
-        toast.error(data.error ?? t.generatePage.generateFailed);
+        if (data.code === EMPTY_LIBRARY_CODE) setLibraryEmpty(true);
+        else toast.error(data.error ?? t.generatePage.generateFailed);
         setGen({ status: "idle" });
         return;
       }
@@ -91,6 +103,27 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
         toast.error(result.error);
       }
     });
+  }
+
+  if (libraryEmpty) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+          <Dumbbell className="size-8 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="font-medium">{t.generatePage.emptyLibraryTitle}</p>
+            <p className="mx-auto max-w-sm text-sm text-muted-foreground">
+              {t.generatePage.emptyLibraryDesc}
+            </p>
+          </div>
+          <Button size="sm" asChild>
+            <Link href="/exercises">
+              <Dumbbell className="size-4" /> {t.generatePage.emptyLibraryCta}
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -133,7 +166,10 @@ export function PlanGenerator({ aiEnabled }: { aiEnabled: boolean }) {
               </button>
             ))}
           </div>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {t.generatePage.libraryScopeNote}
+            </p>
             <Button onClick={generate} disabled={gen.status === "loading"}>
               <Sparkles className="size-4" />
               {gen.status === "loading"

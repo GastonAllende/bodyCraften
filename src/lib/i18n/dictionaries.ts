@@ -310,6 +310,17 @@ export const en = {
     saving: "Saving…",
     savedToPlans: "“{name}” saved to your plans.",
     savedToPlansDesc: "Schedule its days from the Plans page.",
+    libraryScopeNote: "Plans are built only from the exercises in your library.",
+    emptyLibraryTitle: "Your exercise library is empty",
+    emptyLibraryDesc:
+      "Plans are built from the exercises in your library, so there is nothing to build one with yet. Add a few exercises first and come back.",
+    emptyLibraryCta: "Add exercises",
+    emptyLibraryError:
+      "Your exercise library is empty — add exercises before generating a plan.",
+    noLibraryMatchError:
+      "None of the suggested exercises are in your library. Try rephrasing, or add more exercises.",
+    unreadablePlanError:
+      "The plan came back in a shape we couldn't read. Try generating again.",
   },
   profilePage: {
     title: "Profile",
@@ -768,6 +779,18 @@ export const es: Dictionary = {
     saving: "Guardando…",
     savedToPlans: "“{name}” guardado en tus planes.",
     savedToPlansDesc: "Programa sus días desde la página de Planes.",
+    libraryScopeNote:
+      "Los planes se crean solo con los ejercicios de tu biblioteca.",
+    emptyLibraryTitle: "Tu biblioteca de ejercicios está vacía",
+    emptyLibraryDesc:
+      "Los planes se crean con los ejercicios de tu biblioteca, así que todavía no hay nada con lo que crear uno. Añade algunos ejercicios y vuelve.",
+    emptyLibraryCta: "Añadir ejercicios",
+    emptyLibraryError:
+      "Tu biblioteca de ejercicios está vacía — añade ejercicios antes de generar un plan.",
+    noLibraryMatchError:
+      "Ninguno de los ejercicios sugeridos está en tu biblioteca. Reformula tu petición o añade más ejercicios.",
+    unreadablePlanError:
+      "El plan llegó en un formato que no pudimos leer. Genera el plan de nuevo.",
   },
   profilePage: {
     title: "Perfil",

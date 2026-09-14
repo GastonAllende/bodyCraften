@@ -35,6 +35,7 @@ import type {
   ExerciseProgressPoint,
   LastSessionHints,
   LibraryExercise,
+  LibraryExerciseChoice,
   PlanWithDays,
   ScheduledDayPrefill,
   ProfileView,
@@ -234,6 +235,46 @@ export async function getLibraryExercises(
     source: e.source as LibraryExercise["source"],
     imageUrl: (e.imagePath && urlByPath.get(e.imagePath)) || undefined,
   }));
+}
+
+/**
+ * The names + facets of everything in this user's library, for AI plan
+ * generation. Deliberately not `getLibraryExercises()`: that one signs a
+ * Storage URL per image, which the generator has no use for.
+ *
+ * Same scope as the library the /exercises page saves into — the shared
+ * built-in rows plus this user's own — so an empty result really does mean
+ * "this user has nothing to build a plan from".
+ */
+export async function getLibraryExerciseChoices(
+  userId: string,
+): Promise<LibraryExerciseChoice[]> {
+  const db = getDb();
+  return db
+    .select({
+      name: exercises.name,
+      bodyPart: exercises.bodyPart,
+      equipment: exercises.equipment,
+      target: exercises.target,
+    })
+    .from(exercises)
+    .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
+    .orderBy(asc(exercises.name));
+}
+
+/**
+ * Whether this user has anything to generate a plan from. Same scope as
+ * `getLibraryExerciseChoices()`, but stops at the first row — the Generate page
+ * only needs to know if the library is empty, not what's in it.
+ */
+export async function hasLibraryExercises(userId: string): Promise<boolean> {
+  const db = getDb();
+  const rows = await db
+    .select({ id: exercises.id })
+    .from(exercises)
+    .where(or(isNull(exercises.userId), eq(exercises.userId, userId)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /** Latest logged session per exercise — powers "last time" hints in the logger. */

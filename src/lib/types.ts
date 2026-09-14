@@ -33,6 +33,18 @@ export type LibraryExercise = {
   imageUrl?: string;
 };
 
+/**
+ * The slice of a library row the plan generator needs: enough to describe the
+ * exercise to the model, nothing more. `name` is the canonical English name,
+ * which is also what gets written back to `plan_exercises.exercise_name`.
+ */
+export type LibraryExerciseChoice = {
+  name: string;
+  bodyPart: string;
+  equipment: string;
+  target: string;
+};
+
 export type ExerciseInput = {
   name: string;
   bodyPart: string;
@@ -105,6 +117,21 @@ export type GeneratedPlan = {
       notes: string;
     }[];
   }[];
+};
+
+/**
+ * `POST /api/generate` marks this on its error response when the caller's
+ * exercise library is empty, so the client can render the "add exercises first"
+ * empty state instead of a toast.
+ */
+export const EMPTY_LIBRARY_CODE = "empty_library";
+
+/** The response body of `POST /api/generate`, shared with its only caller. */
+export type GeneratePlanResponse = {
+  plan?: GeneratedPlan;
+  demo?: boolean;
+  error?: string;
+  code?: typeof EMPTY_LIBRARY_CODE;
 };
 
 export type PlanWithDays = Plan & {
